@@ -1,0 +1,10 @@
+{
+  "name": "ኢትዮ Online Market",
+  "description": "The most secure and authoritative Ethiopian social media marketplace for buying and selling verified accounts via secure escrow.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "version": "2.0.0",
+  "releaseNotes": "Production lifecycle hardening: seller moderation, buyer payment verification, handover tickets, persistent customer accounts, listing progress/sold states, admin marketplace removal, and improved registration."
+}
