@@ -32,8 +32,8 @@ async function enterLocalApiQueue(): Promise<() => void> {
 
 export async function createApp(): Promise<express.Express> {
   const requirePostgres =
-    process.env.NODE_ENV === 'production' &&
-    (process.env.REQUIRE_POSTGRES === 'true' || process.env.VERCEL === '1');
+    process.env.VERCEL === '1' ||
+    (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true');
 
   // In Vercel production, fail closed if durable storage is missing rather than
   // silently accepting accounts/orders into an instance-local memory cache.
