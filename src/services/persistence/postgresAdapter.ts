@@ -92,11 +92,54 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     }
   }
 
+  private getPersistedItemId(item: any): string | null {
+    const id = item?.id ?? item?.userId ?? item?.token;
+    return typeof id === 'string' && id.length > 0 ? id : null;
+  }
+
   public batchSave<T>(collectionName: string, items: T[]): void {
+    // Keep the complete in-process collection, including records whose stable key
+    // is named userId/token by the auth vault rather than id.
     this.cache.set(collectionName, [...items]);
-    for (const item of items as any[]) {
-      if (item && typeof item.id === 'string') this.save(collectionName, item);
-    }
+
+    if (!pool) return;
+
+    const identifiedItems = (items as any[])
+      .map((item) => ({ id: this.getPersistedItemId(item), item }))
+      .filter((entry) => Boolean(entry.id)) as Array<{ id: string; item: any }>;
+    const persistedIds = identifiedItems.map((entry) => entry.id);
+
+    const writeBatch = (async () => {
+      const client = await pool!.connect();
+      try {
+        await client.query('BEGIN');
+        // batchSave replaces a collection: delete removed rows too, so old
+        // listings/orders/notifications cannot reappear after a server restart.
+        await client.query(
+          'DELETE FROM backend_storage WHERE collection = $1 AND NOT (id = ANY($2::varchar[]))',
+          [collectionName, persistedIds]
+        );
+
+        const upsert = `
+          INSERT INTO backend_storage (collection, id, data, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (collection, id)
+          DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+        `;
+
+        for (const entry of identifiedItems) {
+          await client.query(upsert, [collectionName, entry.id, entry.item]);
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
+    })();
+
+    this.trackWrite(collectionName, writeBatch);
   }
 
   public delete(collectionName: string, id: string): void {
