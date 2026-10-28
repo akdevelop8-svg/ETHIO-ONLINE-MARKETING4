@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import bodyParser from 'body-parser';
 import { pool } from './src/db/pg.js';
@@ -167,6 +166,7 @@ async function startServer() {
   app.use(errorHandlerMiddleware);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
@@ -178,6 +178,12 @@ async function startServer() {
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  }
+
+  // Vercel invokes this Express app as a serverless function; do not open a
+  // long-lived listener inside the function runtime.
+  if (process.env.VERCEL === '1') {
+    return app;
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
@@ -203,9 +209,16 @@ async function startServer() {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+  return app;
 }
 
-startServer().catch((err: any) => {
-  console.error('EOM startup failed:', err?.message || err);
-  process.exitCode = 1;
-});
+// Shared initialization promise: the standalone Node server listens locally,
+// while Vercel's catch-all API function awaits the same initialized Express app.
+export const appPromise = startServer();
+
+if (process.env.VERCEL !== '1') {
+  appPromise.catch((err: any) => {
+    console.error('EOM startup failed:', err?.message || err);
+    process.exitCode = 1;
+  });
+}

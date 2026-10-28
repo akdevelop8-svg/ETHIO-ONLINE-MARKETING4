@@ -1,67 +1,54 @@
-# EOM Production Deployment: Supabase, Render, and Vercel
+# EOM Production Deployment: Vercel + Supabase
 
-This app uses an Express API and PostgreSQL. Supabase supplies the managed PostgreSQL database; the backend connects with `pg` and applies `src/db/schema.sql` during startup. Do **not** put database credentials in frontend variables or commit real secrets.
+This project is configured to use GitHub for source control, Vercel for the frontend and Express API serverless function, and Supabase for PostgreSQL. A separate Render service is not required.
 
-## 1. Create the database in Supabase
+## 1. Deploy from GitHub to Vercel
 
-1. Create a Supabase project and wait until its database is available.
-2. Open **Project Settings → Database → Connection string**.
-3. Choose the **Session pooler** connection URI when deploying on a host that may not support a direct IPv6 connection. Use the URI format Supabase shows for your project and set SSL mode to `require`.
-4. If the database password has symbols such as `@`, `:`, `/`, `#`, or `?`, URL-encode those characters before placing it in the URI.
-5. Keep the URI private. It is a backend secret.
+1. Open the Vercel dashboard and import `akdevelop8-svg/ETHIO-ONLINE-MARKETING4`.
+2. Use the `main` branch for production. For this serverless migration, first deploy the feature branch as a Preview and test it before merging.
+3. Use Node.js 22.x.
+4. Build command: `npm run build`.
+5. Output directory: `dist`.
+6. The repository's `vercel.json` configures the Vite build and includes the SQL schema file in the API function bundle.
+7. The catch-all function at `api/[...path].ts` forwards API requests to the Express app exported through `appPromise` in `server.ts`.
 
-The app runs `src/db/schema.sql` when the backend starts. This creates/updates the app's SQL tables, including `users`, `users_secrets`, and `backend_storage`. Customer passwords are stored as bcrypt hashes in `users_secrets`; never store plain-text passwords.
+Vercel should serve the static React build and route API endpoints under `/api/*` to the serverless function on the same domain. The frontend should therefore use the default same-origin API URL; do not set `VITE_API_BASE_URL` for this deployment.
 
-## 2. Configure the backend host (Render)
+## 2. Configure Supabase
 
-In the Render service that runs this repository, set these environment variables in **Environment**:
+1. Create or open the Supabase project and wait until its database is available.
+2. Find the PostgreSQL **Session Pooler** connection URI under **Connect** or **Project Settings → Database**.
+3. Keep the URI private. If its password contains URL-special characters, encode them correctly.
+4. The app applies `src/db/schema.sql` during server initialization.
 
-- `NODE_ENV=production`
-- `REQUIRE_POSTGRES=true`
-- `DATABASE_URL=<the Supabase Session Pooler URI>`
-- `JWT_SECRET=<a unique random secret of at least 32 characters>`
-- `ADMIN_PASSWORD=<a strong private admin password>`
-- `GEMINI_API_KEY=<your server-side Gemini API key>`
-- `GEMINI_MODEL=gemini-3.8-flash`
-- `CORS_ORIGIN=https://YOUR-VERCEL-DOMAIN.vercel.app`
+## 3. Configure Vercel environment variables
 
-For a custom frontend domain, include its exact origin in `CORS_ORIGIN` as well, separated by a comma. Origins should include the scheme (for example `https://`) but no path or trailing slash.
+Open **Vercel → Project → Settings → Environment Variables** and add:
 
-Recommended Render commands:
+- `DATABASE_URL` — Supabase PostgreSQL Session Pooler URI.
+- `JWT_SECRET` — unique random server-side secret of at least 32 characters.
+- `ADMIN_PASSWORD` — strong private password for the authorized admin usernames.
+- `GEMINI_API_KEY` — server-side Gemini key if AI features are enabled.
+- `NODE_ENV` — `production`.
+- `REQUIRE_POSTGRES` — `true`.
 
-- Build: `npm install --include=dev --no-audit --no-fund && npm run build`
-- Start: `npm start`
-- Health check: `/api/health`
+Only set `CORS_ORIGIN` if you need to allow a separate frontend origin. For the same-origin Vercel frontend and API, it can be left unset. Never put any secret in a `VITE_*` variable or commit a real secret to GitHub.
 
-The backend now refuses to start in production when `REQUIRE_POSTGRES=true` but the database URL is missing/invalid or persisted application data cannot be loaded. This prevents silent use of memory-only storage.
-
-## 3. Configure Vercel when frontend and backend are on different hosts
-
-If Vercel hosts only the built React frontend and Render hosts the Express API:
-
-1. Open the Vercel project for this frontend.
-2. Go to **Settings → Environment Variables**.
-3. Add `VITE_API_BASE_URL` with the **backend origin only**, e.g. `https://YOUR-RENDER-SERVICE.onrender.com`. Do not append `/api`; the application adds that automatically. An origin that already ends in `/api` is also normalized.
-4. Apply it to Production (and Preview if you test preview deployments).
-5. Redeploy the frontend so Vite embeds the new value into the build.
-
-Do not set `DATABASE_URL`, `JWT_SECRET`, `ADMIN_PASSWORD`, or `GEMINI_API_KEY` as `VITE_*` variables. Every `VITE_*` variable is visible to the browser.
-
-If the same Express service on Render serves both the frontend and API, leave `VITE_API_BASE_URL` unset; same-origin `/api` requests are correct.
+Redeploy after setting or changing environment variables.
 
 ## 4. Verify the deployment
 
-Open these URLs using the actual backend origin:
+Use your actual Vercel domain:
 
-1. `https://YOUR-BACKEND-ORIGIN/api/health` → should return JSON with `"status":"ok"`.
-2. `https://YOUR-BACKEND-ORIGIN/api/health/db` → must return `"status":"connected"`; `"simulated"` is not acceptable for production.
-3. Open the frontend, register a **new test account**, sign out, sign back in, and refresh the page.
-4. Check the Supabase SQL editor for the new row in `public.users` and its hash in `public.users_secrets`. Never expose or copy the hash to the frontend.
-5. Sign in to the Admin Portal and verify the customer appears in the Users tab.
-6. Send a normal question in the AI assistant. If the API is reachable but the AI reports a configuration problem, check the Render logs and the server-side `GEMINI_API_KEY` / `GEMINI_MODEL` values.
+1. `/api/health` should return JSON containing `"status":"ok"`.
+2. `/api/health/db` must return `"status":"connected"`; `"simulated"` is not acceptable for production.
+3. Register a new test account, sign out, sign back in, and refresh the page.
+4. Confirm the test account exists in Supabase.
+5. Test listing creation, buying/order flow, admin moderation, notifications, and AI.
+6. Review Vercel function logs and Supabase logs for errors.
 
-Unknown `/api/*` URLs now return a JSON 404 instead of the SPA's HTML page, which makes routing mistakes easier to diagnose.
+## Important serverless and data notes
 
-## Important data note
+This codebase was originally written as a long-running Express server and uses a persistence adapter with an in-memory cache plus asynchronous PostgreSQL writes. Vercel serverless functions can run in separate instances, so the cache may be stale across instances and background writes may not finish before a function is frozen. The deployment wiring alone does not prove that every marketplace workflow is safe for production. Test all workflows in Preview, and before real customer or payment use, ensure database writes are awaited and shared state is read from PostgreSQL rather than relying on a per-instance cache.
 
-Only records written after the production backend is connected to Supabase are guaranteed to persist there. Any prior demo/local-storage/in-memory records are not automatically migrated by deploying this code. Back up and explicitly migrate any real pre-existing customer data before deleting or replacing an older database.
+Existing local/demo/in-memory records are not automatically migrated to Supabase. Back up and explicitly migrate any real data before replacing an older deployment.
