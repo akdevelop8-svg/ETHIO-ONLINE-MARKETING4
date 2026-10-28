@@ -5,6 +5,7 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
   private cache = new Map<string, any[]>();
   private isLoaded = false;
   private pendingWrites = new Set<Promise<void>>();
+  private pendingWriteErrors: string[] = [];
 
   public async loadAllFromDatabase(): Promise<void> {
     if (!pool) {
@@ -14,8 +15,6 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     }
 
     try {
-      // Synchronous domain repositories store camelCase objects in JSONB so
-      // marketplace data survives server restarts without schema shape drift.
       const res = await pool.query('SELECT collection, id, data FROM backend_storage');
       this.cache.clear();
 
@@ -34,8 +33,6 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
       this.isLoaded = false;
       console.error('Failed to load persisted data from PostgreSQL:', err?.message || err);
 
-      // In production, never continue with an empty in-memory cache when the
-      // database is configured as required; that would hide data loss.
       if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true') {
         throw new Error('Unable to load EOM persistent data from PostgreSQL. Startup stopped to protect existing data.');
       }
@@ -48,18 +45,25 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     const pending = queryPromise
       .then(() => undefined)
       .catch((err: any) => {
-        // Log the collection and error only; never log customer data or password hashes.
-        console.error(`PostgreSQL persistence write failed for collection "${collectionName}":`, err?.message || err);
+        // Never log customer data, credentials, or password hashes.
+        const safeMessage = err?.message || 'Unknown database error';
+        console.error(`PostgreSQL persistence write failed for collection "${collectionName}":`, safeMessage);
+        this.pendingWriteErrors.push(`Collection "${collectionName}" could not be persisted.`);
       });
 
     this.pendingWrites.add(pending);
     void pending.finally(() => this.pendingWrites.delete(pending));
   }
 
-  /** Wait for currently queued writes before a graceful server shutdown. */
+  /** Wait for currently queued writes and fail when any write did not persist. */
   public async flushPendingWrites(): Promise<void> {
     while (this.pendingWrites.size > 0) {
       await Promise.all(Array.from(this.pendingWrites));
+    }
+
+    if (this.pendingWriteErrors.length > 0) {
+      const failedWrites = this.pendingWriteErrors.splice(0, this.pendingWriteErrors.length);
+      throw new Error(`Failed to persist ${failedWrites.length} database write operation(s).`);
     }
   }
 
@@ -98,8 +102,6 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
   }
 
   public batchSave<T>(collectionName: string, items: T[]): void {
-    // Keep the complete in-process collection, including records whose stable key
-    // is named userId/token by the auth vault rather than id.
     this.cache.set(collectionName, [...items]);
 
     if (!pool) return;
@@ -113,8 +115,6 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
       const client = await pool!.connect();
       try {
         await client.query('BEGIN');
-        // batchSave replaces a collection: delete removed rows too, so old
-        // listings/orders/notifications cannot reappear after a server restart.
         await client.query(
           'DELETE FROM backend_storage WHERE collection = $1 AND NOT (id = ANY($2::varchar[]))',
           [collectionName, persistedIds]
