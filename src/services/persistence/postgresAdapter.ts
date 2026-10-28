@@ -33,7 +33,7 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
       this.isLoaded = false;
       console.error('Failed to load persisted data from PostgreSQL:', err?.message || err);
 
-      if (process.env.NODE_ENV === 'production' && (process.env.REQUIRE_POSTGRES === 'true' || process.env.VERCEL === '1')) {
+      if (process.env.VERCEL === '1' || (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true')) {
         throw new Error('Unable to load EOM persistent data from PostgreSQL. Startup stopped to protect existing data.');
       }
 
