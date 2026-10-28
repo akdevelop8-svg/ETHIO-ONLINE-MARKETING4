@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS users_secrets (
 
 -- 9. GENERIC PERSISTENCE STORE
 -- Stores application-domain objects in JSONB so the synchronous service/repository
--- layer survives Render restarts while keeping secrets out of the JSON store.
+-- layer persists across Vercel serverless invocations while keeping secrets out of this store.
 CREATE TABLE IF NOT EXISTS backend_storage (
     collection VARCHAR(150) NOT NULL,
     id VARCHAR(150) NOT NULL,
@@ -166,3 +166,16 @@ CREATE INDEX IF NOT EXISTS idx_transactions_order ON transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_disputes_order ON disputes(order_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+
+
+-- 10. COMMUNITY MESSAGES
+-- Persist community chat separately because it is queried directly by SQL.
+CREATE TABLE IF NOT EXISTS community_messages (
+    id UUID PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_messages_created_at ON community_messages(created_at);
