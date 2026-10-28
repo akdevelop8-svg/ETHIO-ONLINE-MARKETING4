@@ -1,65 +1,75 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+<img width="1200" height="475" alt="Ethio Online Market" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
-# Run and deploy your AI Studio app
+# Ethio Online Market (EOM)
 
-This contains everything you need to run your app locally.
+Ethio Online Market is a React/Vite marketplace with an Express API and Supabase PostgreSQL persistence.
 
-View your app in AI Studio: https://ai.studio/apps/29b3fcc3-c6b8-4a4e-8f96-86be4c2534fa
+**Deployment stack:** GitHub + Vercel + Supabase only. No Render service is required.
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  Node.js
+**Prerequisite:** Node.js 22.x.
 
+1. Install packages:
+   \`npm install --include=dev --no-audit --no-fund\`
+2. Create a local \`.env\` file and set \`DATABASE_URL\`, \`JWT_SECRET\`, and \`ADMIN_PASSWORD\`. Add \`GEMINI_API_KEY\` only if the live AI assistant should be enabled.
+3. Start the local app:
+   \`npm run dev\`
+4. Create a production frontend build:
+   \`npm run build\`
 
-1. Install dependencies:
-   `npm install --include=dev --no-audit --no-fund`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+The local Express entry point is \`dev-server.ts\`. Vercel serves the built Vite frontend from \`dist\` and the serverless API through \`api/[...path].ts\`.
 
+## Deploy with Vercel + Supabase
 
-## PRODUCTION DEPLOYMENT
+### 1. Connect GitHub to Vercel
 
-### Render
+Import \`akdevelop8-svg/ETHIO-ONLINE-MARKETING4\` into Vercel. Keep the project root at the repository root. The checked-in \`vercel.json\` selects the Vite preset, builds the frontend into \`dist\`, includes the SQL schema in the API function, and routes SPA pages to \`index.html\`.
 
-- **Build Command:** `npm install --include=dev --no-audit --no-fund && npm run build`
-- **Start Command:** `npm start`
-- **Health Check Path:** `/api/health`
-- **Node:** 22.x recommended
+### 2. Configure environment variables in Vercel
 
+Open **Project Settings → Environment Variables** and add the following to Production. Add them to Preview too when testing preview deployments.
 
-Set these Render environment variables before deployment:
+- \`DATABASE_URL\` — Supabase PostgreSQL **Transaction Pooler** connection URI (usually port \`6543\`); copy the URI from the Supabase Connect dialog rather than constructing the host manually.
+- \`JWT_SECRET\` — a unique random secret, at least 32 characters.
+- \`ADMIN_PASSWORD\` — the private password for authorized administrator sign-in.
+- \`REQUIRE_POSTGRES=true\` — documents that persistent storage is mandatory.
+- \`GEMINI_API_KEY\` — optional server-side Gemini key for live AI responses.
+- \`GEMINI_MODEL\` — optional model override for the AI assistant.
+- \`NODE_ENV=production\` — recommended for production behavior.
 
-- DATABASE_URL — Render PostgreSQL connection URL
-- JWT_SECRET — long random server-side secret
-- ADMIN_PASSWORD — server-side password for the two authorized admin usernames
-- GEMINI_API_KEY — Gemini API key if AI features are enabled
-- NODE_ENV=production
-- REQUIRE_POSTGRES=true
+Never put database credentials, the JWT secret, the admin password, or the Gemini API key in a \`VITE_*\` variable. Never commit real secrets to GitHub or share them in chat.
 
-Customer registration does not require email verification and does not require choosing Buyer/Seller. A normal customer account uses role USER and can browse, buy, and submit listings for sale.
+### 3. Use the same origin for frontend and API
 
-Authorized admin usernames remain @mr_ebek and @EXO_SMM. Do not put the admin password or JWT secret in frontend code or GitHub.
+The frontend calls \`/api\` on its own Vercel origin. Do **not** set \`VITE_API_BASE_URL\` for this deployment. If it was previously set to a Render or other backend URL, remove it from Vercel and redeploy. \`CORS_ORIGIN\` is not needed for the normal same-origin setup.
 
+### 4. Verify the deployment
 
-## Database and split-host frontend/API configuration
+Open the deployed Vercel site and check:
 
-For production PostgreSQL persistence, configure `DATABASE_URL` with the Supabase PostgreSQL **Session Pooler** URI and keep `REQUIRE_POSTGRES=true`. The backend applies `src/db/schema.sql` during startup. Production startup fails rather than silently continuing in memory if the required database is unavailable.
+1. \`https://YOUR-VERCEL-DOMAIN/api/health\` returns JSON with \`"status":"ok"\`.
+2. \`https://YOUR-VERCEL-DOMAIN/api/health/db\` returns \`"status":"connected"\`.
+3. Register a new test account, sign out, sign in again, and refresh.
+4. Check Supabase's SQL Editor or Table Editor for the new user in \`public.users\`; the password hash is stored separately in \`public.users_secrets\`.
+5. Test listing submission, admin moderation, orders, notifications, and the AI assistant.
 
-If the React frontend is hosted on Vercel while the Express API is hosted separately (for example on Render), set Vercel's `VITE_API_BASE_URL` to the backend origin, then redeploy. Configure the backend's `CORS_ORIGIN` with the exact frontend origin. Leave `VITE_API_BASE_URL` unset only when the same Express host serves both the frontend and `/api` routes.
+The SQL schema in \`src/db/schema.sql\` is applied by the serverless app during initialization. If initialization fails, check the Vercel Function logs and the Supabase connection URI. Do not test using real payment credentials or real customer financial information.
 
-See [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md) for the full setup and verification checklist. Never put database credentials, the JWT secret, admin password, or AI provider key in a `VITE_*` variable or commit real values to GitHub.
+## Persistence and scale notes
 
-## EOM v2.0.0 — Marketplace & Escrow lifecycle
-- Seller submissions use the server-authoritative `/api/listings/create` flow and enter `PENDING_REVIEW`.
-- Admins `@mr_ebek` and `@EXO_SMM` can Approve/Reject listings from Admin → Moderation.
-- Approved listings are `ACTIVE`; an accepted purchase reserves the listing as `ON_PROGRESS`; completed purchases become `SOLD OUT`.
-- Cancelled/rejected orders release the listing back to `ACTIVE` when appropriate.
-- Buyer payment supports Telebirr, CBE, and Bank of Abyssinia, with receipt + sender/reference notes sent to Admin → Payments.
-- Admin payment Approve creates a durable handover ticket containing the buyer, item, order/transaction IDs, and the authorized Telegram contacts.
-- Payment Reject requires a reason and notifies the buyer so corrected evidence can be resubmitted.
-- Email, phone (when provided), and username uniqueness are enforced server-side. Registration no longer exposes the old rigid `username must be 3-32 characters` message.
-- Admins can remove approved listings from the marketplace while preserving the audit trail.
-- `AK DEVELOP ™` remains only in the footer attribution and the AI developer attribution; administrative UI uses `mr_ebek & EXO_SMM`.
+Most marketplace services use synchronous collection repositories backed by \`backend_storage\`. On Vercel, the API reloads this data from Supabase under a transaction-scoped PostgreSQL advisory lock and waits for queued writes before sending a response. This avoids stale per-instance collection snapshots, but serializes the marketplace API's storage-backed requests and is intended for a small early-stage workload. Before substantial traffic, the long-term improvement is to convert those synchronous repository operations to direct asynchronous SQL transactions.
+
+Only data written to the connected production Supabase database persists between serverless invocations. Local browser storage, development memory, and any older demo records are not automatically migrated. Back up and explicitly migrate any existing real records before replacing a live database.
+
+## Marketplace behavior
+
+- Customer accounts can register and sign in; email verification is not required by the current flow.
+- Normal customers use role \`USER\` and can browse the marketplace and submit listings for review.
+- Authorized admin usernames are \`@mr_ebek\` and \`@EXO_SMM\`; their password must be configured server-side.
+- New seller listings enter \`PENDING_REVIEW\` and become public only after an authorized administrator approves them.
+- The stated marketplace commission is 25%; seller payout is 75% of the order amount.
+- Payment evidence must be checked by an authorized administrator. Uploading proof alone does not mean a payment is verified.
+- \`AK DEVELOP ™\` remains the footer and AI developer attribution.
