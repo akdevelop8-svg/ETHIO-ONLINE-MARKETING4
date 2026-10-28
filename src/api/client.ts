@@ -3,9 +3,8 @@ const configuredApiBase = typeof viteEnv?.VITE_API_BASE_URL === 'string'
   ? viteEnv.VITE_API_BASE_URL.trim().replace(/\/+$/, '')
   : '';
 
-// VITE_API_BASE_URL is the backend origin (or its /api root) when the frontend
-// and Express API are deployed on different hosts. When unset, same-origin
-// /api requests are used (for a single-host Render deployment, for example).
+// VITE_API_BASE_URL is only needed when the API is hosted on a different origin.
+// The Vercel deployment serves the frontend and API on the same origin, so leave it unset.
 const apiRoot = configuredApiBase
   ? `${configuredApiBase.replace(/\/api$/i, '')}/api`
   : '/api';
