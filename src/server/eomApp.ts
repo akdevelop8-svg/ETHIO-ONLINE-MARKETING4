@@ -21,7 +21,7 @@ let currentAdapter: PostgresPersistenceAdapter | undefined;
 
 function shouldSkipServerlessStorageLock(originalUrl: string): boolean {
   const pathname = originalUrl.split('?')[0].replace(/\/+$/, '') || '/';
-  return /^\/api\/(?:health(?:\/db)?|db-status|ai(?:\/|$)|community(?:\/|$))$/i.test(pathname);
+  return /^\/api\/(?:health(?:\/db)?|db-status|ai(?:\/.*)?|community(?:\/.*)?)$/i.test(pathname);
 }
 
 /**
