@@ -51,10 +51,12 @@ export const AiAssistant: React.FC = () => {
       const messageText = error instanceof Error ? error.message : '';
       let userMessageText = 'ይቅርታ፣ ለዚህ ጥያቄ መልስ ማመንጨት አልተሳካም። እባክዎ እንደገና ይሞክሩ።';
 
-      if (/VITE_API_BASE_URL|API route not found|404/i.test(messageText)) {
+      if (/VITE_API_BASE_URL|API (route|endpoint) not found|404/i.test(messageText)) {
         userMessageText = 'የAI ሰርቨሩ አልተገናኘም። የድረገጹ አስተዳዳሪ VITE_API_BASE_URL በfrontend hosting ላይ ወደ backend server እንዲያመለክት ማድረግ አለበት።';
       } else if (/GEMINI_API_KEY|AI assistant is not configured/i.test(messageText)) {
         userMessageText = 'የAI አገልግሎቱ ገና አልተዘጋጀም። አስተዳዳሪው GEMINI_API_KEY በbackend server ላይ ማስገባት አለበት።';
+      } else if (/GEMINI_MODEL|model is unavailable|configured AI model/i.test(messageText)) {
+        userMessageText = 'የAI ሞዴሉ በሰርቨሩ ላይ አልተገኘም። አስተዳዳሪው GEMINI_MODEL ቅንብርን እና የGoogle AI ሰርቨር ሁኔታን ማረጋገጥ አለበት።';
       } else if (/temporarily|busy|rate limit/i.test(messageText)) {
         userMessageText = 'የAI አገልግሎቱ ለአጭር ጊዜ ተጨናንቋል። እባክዎ በትንሽ ጊዜ በኋላ እንደገና ይሞክሩ።';
       }
