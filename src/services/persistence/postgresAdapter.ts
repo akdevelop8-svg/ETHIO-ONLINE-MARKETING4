@@ -5,6 +5,7 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
   private cache = new Map<string, any[]>();
   private isLoaded = false;
   private pendingWrites = new Set<Promise<void>>();
+  private writeErrors: string[] = [];
 
   public async loadAllFromDatabase(): Promise<void> {
     if (!pool) {
@@ -14,8 +15,6 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     }
 
     try {
-      // Synchronous domain repositories store camelCase objects in JSONB so
-      // marketplace data survives server restarts without schema shape drift.
       const res = await pool.query('SELECT collection, id, data FROM backend_storage');
       this.cache.clear();
 
@@ -34,10 +33,13 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
       this.isLoaded = false;
       console.error('Failed to load persisted data from PostgreSQL:', err?.message || err);
 
-      // In production, never continue with an empty in-memory cache when the
-      // database is configured as required; that would hide data loss.
-      if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true') {
-        throw new Error('Unable to load EOM persistent data from PostgreSQL. Startup stopped to protect existing data.');
+      // Never continue with an empty cache in production/serverless. Doing so
+      // could hide an outage and make the application appear to lose data.
+      if (
+        process.env.VERCEL ||
+        (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true')
+      ) {
+        throw new Error('Unable to load EOM persistent data from PostgreSQL. Request stopped to protect existing data.');
       }
 
       this.isLoaded = true;
@@ -48,24 +50,31 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     const pending = queryPromise
       .then(() => undefined)
       .catch((err: any) => {
-        // Log the collection and error only; never log customer data or password hashes.
-        console.error(`PostgreSQL persistence write failed for collection "${collectionName}":`, err?.message || err);
+        // Never log customer records or password hashes.
+        this.writeErrors.push(collectionName);
+        console.error('PostgreSQL persistence write failed for collection "' + collectionName + '":', err?.message || err);
       });
 
     this.pendingWrites.add(pending);
     void pending.finally(() => this.pendingWrites.delete(pending));
   }
 
-  /** Wait for currently queued writes before a graceful server shutdown. */
+  /** Wait for all queued writes and surface failed persistence to callers. */
   public async flushPendingWrites(): Promise<void> {
     while (this.pendingWrites.size > 0) {
       await Promise.all(Array.from(this.pendingWrites));
+    }
+
+    if (this.writeErrors.length > 0) {
+      const failedCollections = Array.from(new Set(this.writeErrors));
+      this.writeErrors = [];
+      throw new Error('PostgreSQL persistence write failed for collection(s): ' + failedCollections.join(', '));
     }
   }
 
   public getAll<T>(collectionName: string): T[] {
     if (!this.isLoaded) {
-      console.warn(`getAll called before loadAllFromDatabase finished for ${collectionName}`);
+      console.warn('getAll called before loadAllFromDatabase finished for ' + collectionName);
     }
     return (this.cache.get(collectionName) || []) as T[];
   }
@@ -82,12 +91,12 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
     this.cache.set(collectionName, all);
 
     if (pool) {
-      const query = `
-        INSERT INTO backend_storage (collection, id, data, updated_at)
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (collection, id)
-        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
-      `;
+      const query = [
+        'INSERT INTO backend_storage (collection, id, data, updated_at)',
+        'VALUES ($1, $2, $3, NOW())',
+        'ON CONFLICT (collection, id)',
+        'DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()'
+      ].join(' ');
       this.trackWrite(collectionName, pool.query(query, [collectionName, item.id, item]));
     }
   }
@@ -98,10 +107,7 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
   }
 
   public batchSave<T>(collectionName: string, items: T[]): void {
-    // Keep the complete in-process collection, including records whose stable key
-    // is named userId/token by the auth vault rather than id.
     this.cache.set(collectionName, [...items]);
-
     if (!pool) return;
 
     const identifiedItems = (items as any[])
@@ -113,19 +119,17 @@ export class PostgresPersistenceAdapter implements IPersistenceAdapter {
       const client = await pool!.connect();
       try {
         await client.query('BEGIN');
-        // batchSave replaces a collection: delete removed rows too, so old
-        // listings/orders/notifications cannot reappear after a server restart.
         await client.query(
           'DELETE FROM backend_storage WHERE collection = $1 AND NOT (id = ANY($2::varchar[]))',
           [collectionName, persistedIds]
         );
 
-        const upsert = `
-          INSERT INTO backend_storage (collection, id, data, updated_at)
-          VALUES ($1, $2, $3, NOW())
-          ON CONFLICT (collection, id)
-          DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
-        `;
+        const upsert = [
+          'INSERT INTO backend_storage (collection, id, data, updated_at)',
+          'VALUES ($1, $2, $3, NOW())',
+          'ON CONFLICT (collection, id)',
+          'DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()'
+        ].join(' ');
 
         for (const entry of identifiedItems) {
           await client.query(upsert, [collectionName, entry.id, entry.item]);
