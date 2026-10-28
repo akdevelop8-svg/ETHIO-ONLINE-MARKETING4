@@ -60,17 +60,19 @@ if (isValidPostgresUrl(dbUrl)) {
     const host = connectionUrl.hostname.toLowerCase();
     const isSupabaseHost = host.endsWith('.supabase.co') || host.endsWith('.pooler.supabase.com');
 
-    // Supabase PostgreSQL requires TLS. Add sslmode=require when the supplied
-    // connection URI did not already specify an SSL mode.
+    // Supabase PostgreSQL requires TLS. Add sslmode=require when missing.
     if (isSupabaseHost && !connectionUrl.searchParams.has('sslmode')) {
       connectionUrl.searchParams.set('sslmode', 'require');
     }
 
+    // A Vercel Function can scale horizontally, so keep a very small per-instance
+    // pool. The app's Vercel request lock uses one connection and queries use the
+    // remaining connection. Use Supabase's Session Pooler URI for session locks.
     pool = new Pool({
       connectionString: connectionUrl.toString(),
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      max: process.env.VERCEL === '1' ? 2 : 10,
+      idleTimeoutMillis: process.env.VERCEL === '1' ? 5000 : 30000,
+      connectionTimeoutMillis: 10000,
       application_name: 'ethio-online-market'
     });
 

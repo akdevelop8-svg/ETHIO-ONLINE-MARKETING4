@@ -1,107 +1,56 @@
-# EOM Production Fix — Render Deployment
+# EOM Production Fix — Vercel + Supabase
 
-This package fixes the production blockers found in the deployed EOM build.
+The production stack is **GitHub + Vercel + Supabase**. Vercel serves the Vite frontend and runs the Express API through Vercel Functions. Supabase supplies the PostgreSQL database.
 
-## 1. What was broken
+## 1. Current production blockers addressed by this branch
 
-- `users_secrets` was queried during customer registration/login but was never created by `schema.sql`.
-- `backend_storage` was used by the persistence adapter but was never created by `schema.sql`.
-- The PostgreSQL persistence adapter loaded normalized SQL tables into camelCase application repositories, so saved marketplace objects could disappear after a restart.
-- Production authentication correctly requires `JWT_SECRET`, but Render was not configured with it.
-- The production deployment is standardized on npm; the repository no longer depends on Bun tooling.
-- The current source contains `src/components/transactions/BuyerPaymentModal.tsx`; the earlier Render commit did not contain/resolve that file, causing the Vite build error.
+- Added API Function entry points at api/index.ts and api/[...path].ts.
+- Separated the local Vite/Express server from the API bootstrap, so the API Function does not need to start a persistent HTTP listener.
+- Required PostgreSQL in Vercel production instead of silently accepting new data into instance-local memory.
+- Refreshed the snapshot-based persistence store from Supabase for each API request, serialized requests across Vercel instances through a PostgreSQL session advisory lock, and wait for queued writes before returning an API response.
+- Propagated database write failures so the API returns a retryable failure rather than silently reporting success.
 
-## 2. Render Environment Variables
+## 2. Vercel project settings
 
-Set these in Render → EOM → Environment:
+Connect the repository akdevelop8-svg/ETHIO-ONLINE-MARKETING4 to the existing Vercel project.
 
-- `DATABASE_URL` = your real PostgreSQL connection URL
-- `JWT_SECRET` = a long random secret (at least 32 characters; do not use the example value)
-- `GEMINI_API_KEY` = your Gemini API key
-- `NODE_ENV` = `production`
+- Root Directory: repository root
+- Node.js: 22.x
+- Build Command: npm run build (Vite build)
+- API functions: api/index.ts and api/[...path].ts
 
-Optional:
+Set these server-side variables in Vercel → Project → Settings → Environment Variables:
 
-- `CORS_ORIGIN` = your deployed EOM URL if you want to restrict CORS. `*` is used when omitted.
+- DATABASE_URL = Supabase PostgreSQL Session Pooler URI, with SSL enabled
+- JWT_SECRET = long, private random secret (at least 32 characters)
+- ADMIN_PASSWORD = strong private administrator password
+- NODE_ENV = production
+- REQUIRE_POSTGRES = true
+- GEMINI_API_KEY = optional, for live AI answers
+- GEMINI_MODEL = optional override for the default model
+- CORS_ORIGIN = optional exact browser origin(s), comma-separated if more than one
 
-## 3. Build and start commands
+Leave VITE_API_BASE_URL unset: frontend and API share the same Vercel domain.
 
-This package uses **npm**. Do not use Bun for this repository unless you intentionally add a Bun lockfile.
+## 3. Supabase database
 
-Build Command:
+In the Supabase dashboard, choose Connect → Session Pooler and copy its URI into DATABASE_URL. Keep the URI and password private. The application applies src/db/schema.sql during API initialization; this creates the tables used by the app, including users_secrets and backend_storage.
 
-`npm install --include=dev --no-audit --no-fund && npm run build`
+Session Pooler mode is required for the current compatibility layer because it uses PostgreSQL session-level advisory locks. Do not use the transaction-mode pooler URI with this code.
 
-Start Command:
+## 4. Test after deployment
 
-`npm start`
+1. /api/health returns status ok.
+2. /api/health/db returns status connected.
+3. Register a new test account, sign out, sign in again, and refresh the site.
+4. Test listing submission and admin moderation with non-financial test data.
+5. Test AI if GEMINI_API_KEY is configured.
+6. Review Vercel runtime logs before trying real payments.
 
-Health Check Path:
+Authorized admin usernames remain @mr_ebek and @EXO_SMM. Never commit database credentials, JWT secrets, admin passwords, or provider keys.
 
-`/api/health`
+## 5. Limitations and data migration
 
-Recommended Node version: **22.x**.
+The existing marketplace service layer uses synchronous collection snapshots. Serializing all API requests is a compatibility step to reduce cross-instance stale writes; it limits throughput and should not be treated as the final high-scale architecture. Before high-volume traffic or real-value transactions, migrate to direct PostgreSQL operations with explicit transactions and suitable row-level locks.
 
-## 4. Database behavior
-
-On server startup, EOM automatically executes `src/db/schema.sql`.
-The schema now creates:
-
-- `users`
-- `users_secrets`
-- `listings`
-- `orders`
-- `transactions`
-- `disputes`
-- `audit_logs`
-- `notifications`
-- `backend_storage`
-
-Customer email verification is disabled: successful registration marks the account verified and immediately signs the customer in.
-
-## 5. Admin login
-
-Only these two handles are accepted by the admin login logic:
-
-- `@mr_ebek`
-- `@EXO_SMM`
-
-The admin password is currently defined by the application logic. For a real public production launch, move it to a Render secret and rotate it after testing.
-
-## 6. Required test order after deployment
-
-1. Open `/api/health` and confirm `status: ok`.
-2. Open `/api/health/db` and confirm `status: connected`.
-3. Register a brand-new customer account.
-4. Confirm the account is automatically signed in without email verification.
-5. Refresh the page and confirm the session remains valid.
-6. Open Dashboard, Account, Sell, and Orders.
-7. Submit a listing as the customer.
-8. Sign in as `@mr_ebek` or `@EXO_SMM` and approve the listing.
-9. Confirm the approved listing appears in Marketplace.
-10. Test buyer order creation and payment verification.
-11. Test admin escrow release/refund/dispute controls.
-
-Do not publish real payment credentials, database passwords, or JWT secrets in GitHub.
-
-## 7. If the frontend is on Vercel and the API is on Render
-
-The frontend no longer assumes the API lives on the same hostname. Add this variable in **Vercel → Project → Settings → Environment Variables**:
-
-- `VITE_API_BASE_URL` = the Render backend origin, for example `https://YOUR-SERVICE.onrender.com` (no path; do not add `/api`).
-
-Apply it to Production and any Preview environment that you test, then redeploy the frontend so the new Vite build includes it.
-
-On Render, set `CORS_ORIGIN` to the exact Vercel frontend origin, such as `https://YOUR-PROJECT.vercel.app`. To allow a custom domain too, list both origins separated by a comma. Use `https://` and do not add a path.
-
-If one Express/Render host serves both the frontend and API, leave `VITE_API_BASE_URL` unset; same-origin `/api` is correct.
-
-## 8. Updated production checks
-
-- `GET /api/health` should return `status: ok`.
-- `GET /api/health/db` must return `status: connected` in production. `simulated` means the app is not using persistent database storage.
-- The backend now returns a JSON 404 for unknown `/api/*` routes instead of returning the single-page app HTML.
-- AI errors distinguish an unavailable API route, missing server-side `GEMINI_API_KEY`, unavailable model, invalid provider credentials, and transient provider rate limits. Configure `GEMINI_MODEL` on the backend only if you need to override the default.
-- Use the Supabase PostgreSQL Session Pooler connection URI as `DATABASE_URL`; do not place the database password or admin/provider secrets in frontend `VITE_*` variables.
-
-See [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md) for the complete configuration details and the local data migration warning.
+Existing browser-local, demo, and in-memory records are not automatically migrated to Supabase. Back up and explicitly migrate any real data before replacing an existing production database.

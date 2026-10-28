@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS users_secrets (
 
 -- 9. GENERIC PERSISTENCE STORE
 -- Stores application-domain objects in JSONB so the synchronous service/repository
--- layer survives Render restarts while keeping secrets out of the JSON store.
+-- layer persists application collections across Vercel Function invocations while keeping secrets out of the JSON store.
 CREATE TABLE IF NOT EXISTS backend_storage (
     collection VARCHAR(150) NOT NULL,
     id VARCHAR(150) NOT NULL,

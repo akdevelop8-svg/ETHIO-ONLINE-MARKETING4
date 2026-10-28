@@ -26,5 +26,5 @@ jobs:
         run: npm install --include=dev --no-audit --no-fund
       - name: Type-check
         run: npm run lint
-      - name: Build application and backend
+      - name: Build Vite frontend
         run: npm run build

@@ -20,37 +20,51 @@ View your app in AI Studio: https://ai.studio/apps/29b3fcc3-c6b8-4a4e-8f96-86be4
    `npm run dev`
 
 
-## PRODUCTION DEPLOYMENT
+## PRODUCTION DEPLOYMENT — Vercel + Supabase
 
-### Render
+The production stack is deliberately limited to **GitHub, Vercel, and Supabase**. Vercel serves the Vite frontend and runs the Express API through Vercel Functions; Supabase provides PostgreSQL persistence.
 
-- **Build Command:** `npm install --include=dev --no-audit --no-fund && npm run build`
-- **Start Command:** `npm start`
-- **Health Check Path:** `/api/health`
-- **Node:** 22.x recommended
+### Vercel deployment
 
+Connect this repository to your existing Vercel project. Keep the project root set to the repository root and use Node.js 22.x. Vercel builds the Vite frontend from the existing build script, while api/index.ts and api/[...path].ts expose the API routes.
 
-Set these Render environment variables before deployment:
+Configure these **server-side Vercel Environment Variables** for Production (and Preview only if you want preview deployments to access a database):
 
-- DATABASE_URL — Render PostgreSQL connection URL
-- JWT_SECRET — long random server-side secret
-- ADMIN_PASSWORD — server-side password for the two authorized admin usernames
-- GEMINI_API_KEY — Gemini API key if AI features are enabled
+- DATABASE_URL — the Supabase PostgreSQL **Session Pooler** URI, with SSL enabled.
+- JWT_SECRET — a private random secret of at least 32 characters.
+- ADMIN_PASSWORD — a strong private administrator password.
 - NODE_ENV=production
 - REQUIRE_POSTGRES=true
+- GEMINI_API_KEY — optional, for live AI answers.
+- GEMINI_MODEL — optional model override; if omitted, the application uses its configured default.
+- CORS_ORIGIN — optional comma-separated list of exact trusted browser origins. Include https:// and no trailing slash.
 
-Customer registration does not require email verification and does not require choosing Buyer/Seller. A normal customer account uses role USER and can browse, buy, and submit listings for sale.
+Do not put DATABASE_URL, JWT_SECRET, ADMIN_PASSWORD, or GEMINI_API_KEY in a VITE_* variable or commit them to GitHub. The frontend and API share the same Vercel origin, so leave VITE_API_BASE_URL unset; the browser will call /api on the current site.
 
-Authorized admin usernames remain @mr_ebek and @EXO_SMM. Do not put the admin password or JWT secret in frontend code or GitHub.
+### Supabase database setup
 
+1. In Supabase, open Connect and choose the **Session Pooler** connection string.
+2. Copy its URI into Vercel's DATABASE_URL variable and keep the password private. If the password contains reserved URI characters, URL-encode them.
+3. The application runs src/db/schema.sql during API initialization. It creates the database tables, including users, users_secrets, and backend_storage.
+4. Redeploy the Vercel project after saving the environment variables.
 
-## Database and split-host frontend/API configuration
+**Important design note:** the marketplace's existing service layer works with synchronous in-memory collection snapshots. On Vercel, API requests are therefore serialized with a PostgreSQL session-level advisory lock, collections are refreshed from the database before each request, and queued writes are flushed before a successful response is sent. This is a compatibility measure for the current codebase and limits API throughput. As traffic grows, replace the snapshot store with direct, transaction-based database operations before allowing concurrent high-volume orders or payments.
 
-For production PostgreSQL persistence, configure `DATABASE_URL` with the Supabase PostgreSQL **Session Pooler** URI and keep `REQUIRE_POSTGRES=true`. The backend applies `src/db/schema.sql` during startup. Production startup fails rather than silently continuing in memory if the required database is unavailable.
+### Verify the deployment
 
-If the React frontend is hosted on Vercel while the Express API is hosted separately (for example on Render), set Vercel's `VITE_API_BASE_URL` to the backend origin, then redeploy. Configure the backend's `CORS_ORIGIN` with the exact frontend origin. Leave `VITE_API_BASE_URL` unset only when the same Express host serves both the frontend and `/api` routes.
+Open these URLs on the deployed Vercel domain:
 
-See [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md) for the full setup and verification checklist. Never put database credentials, the JWT secret, admin password, or AI provider key in a `VITE_*` variable or commit real values to GitHub.
+1. /api/health → JSON with "status":"ok".
+2. /api/health/db → JSON with "status":"connected". A "simulated" result is not suitable for production.
+3. Register a new test user, sign out, sign back in, and refresh the page.
+4. Test listing submission and moderation with non-financial test data.
+5. Send a normal question to the AI assistant if GEMINI_API_KEY is configured.
+
+The production API now refuses to initialize when the required PostgreSQL database is not configured or its persisted data cannot be loaded. A failed persistence write should return a retryable error rather than silently acknowledging success.
+
+Only records written after the production API is connected to Supabase are guaranteed to persist there. Existing browser-local, demo, or in-memory records are not automatically migrated. Back up and explicitly migrate any real data before replacing an existing production database.
+
+Authorized admin usernames remain @mr_ebek and @EXO_SMM. Do not share admin credentials, database connection strings, or API keys in chat or commit them to GitHub.
 
 ## EOM v2.0.0 — Marketplace & Escrow lifecycle
 - Seller submissions use the server-authoritative `/api/listings/create` flow and enter `PENDING_REVIEW`.

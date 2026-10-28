@@ -1,14 +1,6 @@
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | boolean | undefined> }).env;
-const configuredApiBase = typeof viteEnv?.VITE_API_BASE_URL === 'string'
-  ? viteEnv.VITE_API_BASE_URL.trim().replace(/\/+$/, '')
-  : '';
-
-// VITE_API_BASE_URL is the backend origin (or its /api root) when the frontend
-// and Express API are deployed on different hosts. When unset, same-origin
-// /api requests are used (for a single-host Render deployment, for example).
-const apiRoot = configuredApiBase
-  ? `${configuredApiBase.replace(/\/api$/i, '')}/api`
-  : '/api';
+// The frontend and API are deployed together on Vercel. Always use the same
+// origin so a stale VITE_API_BASE_URL setting cannot send requests to an old host.
+const apiRoot = '/api';
 
 export const buildApiUrl = (endpoint: string): string => {
   const withoutApiPrefix = endpoint.replace(/^\/?api(?=\/|$)/i, '');
@@ -60,7 +52,7 @@ export const apiClient = {
           : '';
 
       const message = backendMessage || (res.status === 404
-        ? 'API route not found (404). If your frontend and backend use different hosts, set VITE_API_BASE_URL to the backend origin and redeploy the frontend.'
+        ? 'API route not found (404). Check that the Vercel API Functions were deployed and the project root is the repository root.'
         : `API Error: ${res.status} ${res.statusText}`);
 
       throw new Error(message);
