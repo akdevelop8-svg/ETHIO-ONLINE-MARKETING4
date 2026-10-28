@@ -13,7 +13,7 @@ import {
 } from '../middleware/securityMiddleware.js';
 import { generalApiRateLimiter } from '../middleware/rateLimiter.js';
 
-const isVercelRuntime = Boolean(process.env.VERCEL);
+const isVercelRuntime = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
 const REQUEST_LOCK_ID = '8726642118';
 
 let appPromise: Promise<Express> | undefined;
