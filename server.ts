@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import bodyParser from 'body-parser';
 import { pool } from './src/db/pg.js';
@@ -17,12 +16,33 @@ import { generalApiRateLimiter } from './src/middleware/rateLimiter.js';
 const parsedPort = Number.parseInt(process.env.PORT || '3000', 10);
 const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 
-async function startServer() {
-  const requirePostgres = process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true';
+// The persistence layer is synchronous for existing domain services. On Vercel,
+// refresh it from PostgreSQL and serialize API requests across function instances
+// so one warm instance cannot overwrite a newer collection snapshot from another.
+const VERCEL_LOCK_NAMESPACE = 4546381;
+const VERCEL_LOCK_ID = 1;
+let localApiRequestQueue: Promise<void> = Promise.resolve();
+let activeAdapter: PostgresPersistenceAdapter | null = null;
 
-  // Refuse to launch a production instance that would silently lose data on restart.
+async function enterLocalApiQueue(): Promise<() => void> {
+  const previous = localApiRequestQueue;
+  let release!: () => void;
+  localApiRequestQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  return release;
+}
+
+export async function createApp(): Promise<express.Express> {
+  const requirePostgres =
+    process.env.NODE_ENV === 'production' &&
+    (process.env.REQUIRE_POSTGRES === 'true' || process.env.VERCEL === '1');
+
+  // In Vercel production, fail closed if durable storage is missing rather than
+  // silently accepting accounts/orders into an instance-local memory cache.
   if (requirePostgres && !pool) {
-    throw new Error('DATABASE_URL is missing or invalid while REQUIRE_POSTGRES=true. Configure the Supabase PostgreSQL connection URI.');
+    throw new Error('DATABASE_URL is missing or invalid while PostgreSQL persistence is required. Configure the Supabase PostgreSQL Session Pooler URI.');
   }
 
   if (pool) {
@@ -31,6 +51,7 @@ async function startServer() {
 
   const adapter = new PostgresPersistenceAdapter();
   await adapter.loadAllFromDatabase();
+  activeAdapter = adapter;
   setStorageAdapter(adapter);
 
   // Import domain routers only after the persistence adapter is ready.
@@ -62,8 +83,6 @@ async function startServer() {
 
   const app = express();
 
-  // When CORS_ORIGIN is set, it may contain a comma-separated allowlist.
-  // If unset, reflect request origins rather than combining wildcard + credentials.
   const allowedOrigins = (process.env.CORS_ORIGIN || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -86,11 +105,9 @@ async function startServer() {
 
   app.use(securityHeadersMiddleware);
   app.use(correlationIdMiddleware);
-
   app.use(express.json({ limit: '12mb' }));
   app.use(express.urlencoded({ extended: true, limit: '12mb' }));
   app.use(bodyParser.json({ limit: '12mb' }));
-
   app.use('/api', generalApiRateLimiter);
 
   app.get('/api/health', (_req, res) => {
@@ -130,7 +147,6 @@ async function startServer() {
     }
   });
 
-  // Backward-compatible health alias.
   app.get('/api/db-status', async (_req, res) => {
     try {
       if (pool) {
@@ -147,6 +163,98 @@ async function startServer() {
     }
   });
 
+  // The current domain services use synchronous collection snapshots. While the
+  // application is hosted as Vercel Functions, guard those snapshots with a
+  // PostgreSQL session-level advisory lock, refresh after taking the lock, and
+  // wait for queued writes before acknowledging a successful response.
+  if (process.env.VERCEL === '1' && pool) {
+    app.use('/api', async (req, res, next) => {
+      const releaseLocalQueue = await enterLocalApiQueue();
+      let lockClient: any;
+      let lockAcquired = false;
+      let finalized = false;
+
+      const finishRequest = async () => {
+        if (finalized) return;
+        finalized = true;
+        try {
+          await adapter.flushPendingWrites();
+        } catch (err: any) {
+          console.error('Final PostgreSQL flush failed:', err?.message || err);
+        } finally {
+          if (lockClient) {
+            if (lockAcquired) {
+              try {
+                await lockClient.query('SELECT pg_advisory_unlock($1, $2)', [
+                  VERCEL_LOCK_NAMESPACE,
+                  VERCEL_LOCK_ID
+                ]);
+              } catch (err: any) {
+                console.error('Failed to release PostgreSQL request lock:', err?.message || err);
+              }
+            }
+            lockClient.release();
+          }
+          releaseLocalQueue();
+        }
+      };
+
+      try {
+        lockClient = await pool.connect();
+        await lockClient.query('SELECT pg_advisory_lock($1, $2)', [
+          VERCEL_LOCK_NAMESPACE,
+          VERCEL_LOCK_ID
+        ]);
+        lockAcquired = true;
+
+        // Every request sees the newest committed data written by any Vercel
+        // instance. The global lock prevents a concurrent collection snapshot
+        // from replacing another request's newer data.
+        await adapter.loadAllFromDatabase();
+
+        // Existing services issue writes synchronously but persist them
+        // asynchronously. Do not send a success response until those writes
+        // have completed; surface storage failures as a retryable 503.
+        const originalSend = res.send.bind(res);
+        let sendStarted = false;
+        res.send = ((...args: any[]) => {
+          if (sendStarted) return res;
+          sendStarted = true;
+          void adapter.flushPendingWrites()
+            .then(() => originalSend(...args))
+            .catch((err: any) => {
+              console.error('PostgreSQL persistence failed before response:', err?.message || err);
+              if (res.headersSent) return;
+              res.statusCode = 503;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              originalSend(JSON.stringify({
+                error: 'The database could not save this request. Please retry.'
+              }));
+            });
+          return res;
+        }) as typeof res.send;
+
+        res.once('finish', () => { void finishRequest(); });
+        res.once('close', () => {
+          if (!res.writableFinished) void finishRequest();
+        });
+        return next();
+      } catch (err) {
+        if (lockClient) {
+          if (lockAcquired) {
+            await lockClient.query('SELECT pg_advisory_unlock($1, $2)', [
+              VERCEL_LOCK_NAMESPACE,
+              VERCEL_LOCK_ID
+            ]).catch(() => undefined);
+          }
+          lockClient.release();
+        }
+        releaseLocalQueue();
+        return next(err);
+      }
+    });
+  }
+
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/transactions', transactionsRouter);
@@ -159,37 +267,46 @@ async function startServer() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/seller', sellerRouter);
 
-  // Unknown API paths should return a JSON 404, never the SPA index.html.
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'EOM API endpoint not found. Check the API route and backend deployment.' });
   });
 
   app.use(errorHandlerMiddleware);
 
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+  // Vercel serves Vite's dist output as static files. Only the standalone/local
+  // server serves the frontend itself.
+  if (process.env.VERCEL !== '1') {
+    if (process.env.NODE_ENV !== 'production') {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa'
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
   }
 
+  return app;
+}
+
+async function startServer() {
+  const app = await createApp();
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`EOM Server running on port ${PORT} [Mode: ${process.env.NODE_ENV || 'development'}]`);
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`\nReceived ${signal}. Initiating EOM server graceful shutdown...`);
+    console.log(`\\nReceived ${signal}. Initiating EOM server graceful shutdown...`);
     server.close(async () => {
       console.log('HTTP server closed.');
       try {
-        await adapter.flushPendingWrites();
+        await activeAdapter?.flushPendingWrites();
       } catch (err: any) {
         console.error('Failed to flush pending PostgreSQL writes:', err?.message || err);
       }
@@ -205,7 +322,9 @@ async function startServer() {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-startServer().catch((err: any) => {
-  console.error('EOM startup failed:', err?.message || err);
-  process.exitCode = 1;
-});
+if (process.env.VERCEL !== '1') {
+  startServer().catch((err: any) => {
+    console.error('EOM startup failed:', err?.message || err);
+    process.exitCode = 1;
+  });
+}
