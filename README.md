@@ -44,6 +44,14 @@ Customer registration does not require email verification and does not require c
 Authorized admin usernames remain @mr_ebek and @EXO_SMM. Do not put the admin password or JWT secret in frontend code or GitHub.
 
 
+## Database and split-host frontend/API configuration
+
+For production PostgreSQL persistence, configure `DATABASE_URL` with the Supabase PostgreSQL **Session Pooler** URI and keep `REQUIRE_POSTGRES=true`. The backend applies `src/db/schema.sql` during startup. Production startup fails rather than silently continuing in memory if the required database is unavailable.
+
+If the React frontend is hosted on Vercel while the Express API is hosted separately (for example on Render), set Vercel's `VITE_API_BASE_URL` to the backend origin, then redeploy. Configure the backend's `CORS_ORIGIN` with the exact frontend origin. Leave `VITE_API_BASE_URL` unset only when the same Express host serves both the frontend and `/api` routes.
+
+See [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md) for the full setup and verification checklist. Never put database credentials, the JWT secret, admin password, or AI provider key in a `VITE_*` variable or commit real values to GitHub.
+
 ## EOM v2.0.0 — Marketplace & Escrow lifecycle
 - Seller submissions use the server-authoritative `/api/listings/create` flow and enter `PENDING_REVIEW`.
 - Admins `@mr_ebek` and `@EXO_SMM` can Approve/Reject listings from Admin → Moderation.
