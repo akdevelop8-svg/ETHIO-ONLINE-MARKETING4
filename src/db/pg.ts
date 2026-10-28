@@ -1,31 +1,26 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 const { Pool } = pg;
 
 /**
- * Validates whether a provided connection string is a genuine, well-formed PostgreSQL URL.
- * Protects against masked placeholders (••••), dummy strings, and invalid hosts like 'base'.
+ * Validates whether a provided connection string is a well-formed PostgreSQL URL.
+ * Rejects masked placeholders and invalid hosts before attempting a connection.
  */
 export function isValidPostgresUrl(urlStr?: string): boolean {
   if (!urlStr || typeof urlStr !== 'string') return false;
   const trimmed = urlStr.trim();
 
-  // Must strictly adhere to PostgreSQL protocol URI
   if (!trimmed.startsWith('postgres://') && !trimmed.startsWith('postgresql://')) {
     return false;
   }
-
-  // Must not contain masked bullet characters or placeholders
-  if (trimmed.includes('•') || trimmed.includes('••••')) {
-    return false;
-  }
+  if (trimmed.includes('•') || trimmed.includes('••••')) return false;
 
   try {
     const parsed = new URL(trimmed);
     const host = parsed.hostname;
-    // Reject invalid or placeholder hosts
     if (!host || host === 'base' || host.includes('•') || host === 'your-postgres-host') {
       return false;
     }
@@ -36,13 +31,12 @@ export function isValidPostgresUrl(urlStr?: string): boolean {
 }
 
 /**
- * Returns safe connection metadata without exposing password or sensitive query parameters.
+ * Returns safe connection metadata without exposing passwords or query parameters.
  */
 export function getSanitizedDbInfo(): { isConfigured: boolean; host?: string; database?: string; port?: string } {
   const dbUrl = process.env.DATABASE_URL;
-  if (!isValidPostgresUrl(dbUrl)) {
-    return { isConfigured: false };
-  }
+  if (!isValidPostgresUrl(dbUrl)) return { isConfigured: false };
+
   try {
     const parsed = new URL(dbUrl!);
     return {
@@ -62,25 +56,35 @@ const dbUrl = process.env.DATABASE_URL;
 
 if (isValidPostgresUrl(dbUrl)) {
   try {
+    const connectionUrl = new URL(dbUrl!);
+    const host = connectionUrl.hostname.toLowerCase();
+    const isSupabaseHost = host.endsWith('.supabase.co') || host.endsWith('.pooler.supabase.com');
+
+    // Supabase PostgreSQL requires TLS. Add sslmode=require when the supplied
+    // connection URI did not already specify an SSL mode.
+    if (isSupabaseHost && !connectionUrl.searchParams.has('sslmode')) {
+      connectionUrl.searchParams.set('sslmode', 'require');
+    }
+
     pool = new Pool({
-      connectionString: dbUrl,
+      connectionString: connectionUrl.toString(),
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 3000,
+      connectionTimeoutMillis: 5000,
+      application_name: 'ethio-online-market'
     });
 
     pool.on('error', (err) => {
       console.error('PostgreSQL idle client error:', err.message);
     });
   } catch (err: any) {
-    console.error('Failed to initialize PostgreSQL pool:', err.message);
+    console.error('Failed to initialize PostgreSQL pool:', err?.message || 'Unknown error');
     pool = null;
   }
 } else {
-  if (dbUrl && !isValidPostgresUrl(dbUrl)) {
-    console.warn('⚠️ DATABASE_URL format is invalid, placeholder-masked, or unresolvable. Operating with resilient storage persistence layer.');
+  if (dbUrl) {
+    console.warn('DATABASE_URL is not a valid PostgreSQL URL. Configure the real Supabase/managed PostgreSQL connection URI.');
   } else {
-    console.warn('⚠️ DATABASE_URL not set. Running with resilient local storage persistence for preview environments.');
+    console.warn('DATABASE_URL not set. Persistent database storage is unavailable in this environment.');
   }
 }
-
