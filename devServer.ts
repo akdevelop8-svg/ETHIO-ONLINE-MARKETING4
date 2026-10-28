@@ -1,4 +1,5 @@
 import path from 'path';
+import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { pool } from './src/db/pg.js';
 import { createApp, flushPendingWrites } from './src/createApp.js';
@@ -17,7 +18,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use((await import('express')).default.static(distPath));
+    app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
