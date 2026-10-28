@@ -83,3 +83,25 @@ The admin password is currently defined by the application logic. For a real pub
 11. Test admin escrow release/refund/dispute controls.
 
 Do not publish real payment credentials, database passwords, or JWT secrets in GitHub.
+
+## 7. If the frontend is on Vercel and the API is on Render
+
+The frontend no longer assumes the API lives on the same hostname. Add this variable in **Vercel → Project → Settings → Environment Variables**:
+
+- `VITE_API_BASE_URL` = the Render backend origin, for example `https://YOUR-SERVICE.onrender.com` (no path; do not add `/api`).
+
+Apply it to Production and any Preview environment that you test, then redeploy the frontend so the new Vite build includes it.
+
+On Render, set `CORS_ORIGIN` to the exact Vercel frontend origin, such as `https://YOUR-PROJECT.vercel.app`. To allow a custom domain too, list both origins separated by a comma. Use `https://` and do not add a path.
+
+If one Express/Render host serves both the frontend and API, leave `VITE_API_BASE_URL` unset; same-origin `/api` is correct.
+
+## 8. Updated production checks
+
+- `GET /api/health` should return `status: ok`.
+- `GET /api/health/db` must return `status: connected` in production. `simulated` means the app is not using persistent database storage.
+- The backend now returns a JSON 404 for unknown `/api/*` routes instead of returning the single-page app HTML.
+- AI errors distinguish an unavailable API route, missing server-side `GEMINI_API_KEY`, unavailable model, invalid provider credentials, and transient provider rate limits. Configure `GEMINI_MODEL` on the backend only if you need to override the default.
+- Use the Supabase PostgreSQL Session Pooler connection URI as `DATABASE_URL`; do not place the database password or admin/provider secrets in frontend `VITE_*` variables.
+
+See [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md) for the complete configuration details and the local data migration warning.

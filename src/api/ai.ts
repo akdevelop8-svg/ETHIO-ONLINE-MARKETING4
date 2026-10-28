@@ -1,80 +1,181 @@
 import { Router } from 'express';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from '@google/genai';
 
 const router = Router();
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
 
-const SYSTEM_INSTRUCTION = `You are the Ethio Online Market (ኢትዮ ONLINE MARKET) AI Assistant.
-Your primary purpose is to help users navigate the marketplace, understand how to buy and sell social media accounts, and explain our secure escrow system.
+const SYSTEM_INSTRUCTION = `You are the Ethio Online Market (ኢትዮ ONLINE MARKET) AI Assistant, built by AK DEVELOP ™.
 
-IDENTITY & OWNERSHIP:
-- You were developed exclusively by AK DEVELOP ™.
-- If anyone asks who developed or created you, you MUST say "I was developed by AK DEVELOP ™".
-- NEVER mention "Google", "Google AI", "Gemini", or "Large Language Model" in your identity. You are the ኢትዮ ONLINE MARKET AI.
+HOW TO ANSWER:
+- Answer the user's actual question directly; do not answer every question with a generic apology.
+- Reply in the same language as the user whenever possible, including Amharic.
+- Give a clear, practical explanation about this marketplace and how to use it.
+- If asked about a feature not available to you or a live account/payment status you cannot verify, explain the limit honestly and tell the user how to contact support. Never invent account records, listings, balances, payment confirmations, or transaction status.
+- If the user asks who developed you, say "I was developed by AK DEVELOP ™". Do not claim Google created this assistant.
 
-MARKETPLACE RULES:
-- 25% Platform Fee / 75% Seller Payout.
-- Escrow locks funds until the admin verifies the account handover.
-- Telebirr and CBE are the primary payment methods.
+VERIFIED MARKETPLACE INFORMATION:
+- EOM is a marketplace for buying and selling social-media accounts/channels.
+- Customer accounts can register, sign in, browse the marketplace, submit listings for moderation, manage orders, and contact support.
+- Seller listings enter PENDING_REVIEW and must be approved by an authorized administrator before they become public.
+- The stated platform commission is 25%; the seller payout is 75% of the order amount.
+- The escrow workflow holds funds while payment and account handover are reviewed. Payment evidence must be checked by an authorized administrator; never claim that merely uploading proof means the payment was verified.
+- The website supports Telebirr and CBE as primary payment options; available options can vary by the order flow.
+- Authorized administrators are @mr_ebek and @EXO_SMM. Never reveal passwords, API keys, tokens, or private customer information.
 
 TONE:
-- Professional, helpful, and authoritative.
-- Direct and efficient.`;
+Professional, respectful, concise, and helpful. Ask a short follow-up only when a required detail is missing.`;
+
+function offlineWebsiteAnswer(message: string): string {
+  const q = message.toLowerCase();
+  const isAmharic = /[\u1200-\u137F]/.test(message);
+  let answer: string | null = null;
+  let answerAm: string | null = null;
+
+  if (/25\s*%|fee|fees|commission|platform charge|ኮሚሽን|ክፍያ/.test(q)) {
+    answer = "The EOM platform fee is 25% of the order amount, and the seller payout is 75%. Funds stay in escrow until an authorized administrator verifies the account handover.";
+    answerAm = "የEOM መድረክ ክፍያ ከጠቅላላ የትዕዛዝ ዋጋ 25% ነው፤ ሻጩ 75% ይቀበላል። የአካውንት ማስተላለፍ በተፈቀደለት አድሚን እስኪረጋገጥ ገንዘቡ escrow ውስጥ ይቆያል።";
+  } else if (/escrow|handover|account transfer|secure|ስክሮ|ደህንነት|ሂሳብ ማስተላለፍ/.test(q)) {
+    answer = "EOM uses an escrow workflow. Follow the order instructions, complete the account handover, and wait for an authorized administrator to review it before the transaction is completed.";
+    answerAm = "EOM escrow ሂደት ይጠቀማል። የትዕዛዙን መመሪያ ይከተሉ፣ የአካውንቱን ማስተላለፍ ያጠናቅቁ፣ ከዚያም ግብይቱ ከመጠናቀቁ በፊት በተፈቀደለት አድሚን እስኪመረመር ይጠብቁ።";
+  } else if (/sell|seller|listing|list an account|ለመሸጥ|መሸጥ|ሽያጭ|ማስታወቂያ/.test(q)) {
+    answer = "To sell, sign in and open the Sell area to submit your listing. New listings begin as pending review and become public only after an authorized administrator approves them.";
+    answerAm = "ለመሸጥ መጀመሪያ ይግቡና Sell የሚለውን ክፍል ከፍተው ማስታወቂያዎን ያስገቡ። አዲስ ማስታወቂያ መጀመሪያ Pending Review ላይ ይቆያል፤ በአድሚን ከተፈቀደ በኋላ በገበያው ይታያል።";
+  } else if (/buy|buyer|purchase|order|ግዛ|መግዛት|ግዢ|ትዕዛዝ/.test(q)) {
+    answer = "Browse the Marketplace, open the listing you want, then follow the order and payment instructions shown on the site.";
+    answerAm = "በMarketplace ውስጥ ያሉትን ማስታወቂያዎች ይመልከቱ፣ የሚፈልጉትን ይክፈቱ፣ ከዚያም በድረገጹ ላይ የታዩትን የትዕዛዝና የክፍያ መመሪያዎች ይከተሉ።";
+  } else if (/telebirr|cbe|payment method|pay|payment|ክፈል|ቴሌብር|ባንክ|ክፍያ መንገድ/.test(q)) {
+    answer = "Telebirr and CBE are the primary payment options described by EOM. Follow the payment method shown in your order, and do not treat a payment as confirmed until the platform status is updated.";
+    answerAm = "EOM ዋና የክፍያ አማራጮች Telebirr እና CBE ናቸው። በትዕዛዝዎ ላይ የታየውን የክፍያ መመሪያ ይከተሉ፤ በድረገጹ ላይ ሁኔታው እስኪዘመን ክፍያ ተረጋግጧል ብለው አይቁጠሩ።";
+  } else if (/sign.?up|register|create account|sign.?in|login|password|username|መመዝገብ|መግባት|ይለፍ ቃል|መለያ/.test(q)) {
+    answer = "To register, enter your full name, email, username, and a password of at least 8 characters. Phone is optional. If you already have an account, choose Sign In; use Forgot Password if you need to reset your password.";
+    answerAm = "ለመመዝገብ ሙሉ ስምዎን፣ ኢሜይልዎን፣ username እና ቢያንስ 8 ቁምፊዎች ያሉትን የይለፍ ቃል ያስገቡ። ስልክ ቁጥር አማራጭ ነው። መለያ ካለዎት Sign In ይጠቀሙ፤ የይለፍ ቃልን ለመቀየር Forgot Password ይምረጡ።";
+  } else if (/admin|administrator|dashboard|አድሚን|ዳሽቦርድ/.test(q)) {
+    answer = "The admin dashboard is limited to authorized administrators. Regular customers should use the normal Sign Up and Sign In forms.";
+    answerAm = "የአድሚን ዳሽቦርድ ለተፈቀደላቸው አስተዳዳሪዎች ብቻ ነው። መደበኛ ደንበኞች መደበኛውን Sign Up እና Sign In መጠቀም አለባቸው።";
+  } else if (/who (made|built|developed)|who created|developer|ያዘጋጀ|ማን ሰራ|ማን አዘጋጀ/.test(q)) {
+    answer = "Ethio Online Market was developed by AK DEVELOP ™.";
+    answerAm = "Ethio Online Market የተሰራው በAK DEVELOP ™ ነው።";
+  }
+
+  const finalAnswer = isAmharic ? answerAm : answer;
+  if (finalAnswer) {
+    return finalAnswer + (isAmharic
+      ? "\n\nየቀጥታ AI አገልግሎቱ ለጊዜው አይሰራም፤ ይህ መልስ ከድረገጹ የእገዛ መረጃ የተዘጋጀ ነው።"
+      : "\n\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.");
+  }
+  return isAmharic
+    ? "የቀጥታ AI አገልግሎቱ ለጊዜው አይሰራም፣ ስለዚህ ለዚህ ጥያቄ ትክክለኛ መልስ አሁን መስጠት አልችልም። ስለ መመዝገብ፣ መግዛትና መሸጥ፣ ክፍያ፣ 25% የመድረክ ክፍያ እና escrow ልረዳዎ እችላለሁ።"
+    : "The live AI model is temporarily unavailable, so I cannot reliably answer that specific question right now. I can still help with EOM registration, buying and selling listings, payment methods, the 25% platform fee, and escrow.";
+}
+
+const getProviderStatus = (error: any): number | undefined => {
+  const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
+  return Number.isFinite(status) && status > 0 ? status : undefined;
+};
 
 router.post('/chat', async (req, res) => {
-  try {
-    const { message, history } = req.body;
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    let safeHistory = Array.isArray(history) ? [...history] : [];
-    // Gemini API requires the history to start with a 'user' message.
-    while (safeHistory.length > 0 && safeHistory[0].role !== 'user') {
-      safeHistory.shift();
-    }
-
-    let responseText = '';
-    
-    // Simple retry logic for 503 errors
-    let retries = 2;
-    while (retries >= 0) {
-      try {
-        const chat = ai.chats.create({
-          model: "gemini-3.6-flash",
-          history: safeHistory,
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-          }
-        });
-        const result = await chat.sendMessage({ message });
-        responseText = result.text || '';
-        break; // Success
-      } catch (err: any) {
-        if (retries === 0 || err?.status !== 503) {
-          throw err;
-        }
-        retries--;
-        await new Promise(resolve => setTimeout(resolve, 1500)); // wait 1.5s before retry
-      }
-    }
-    
-    res.json({ 
-      response: responseText,
-      history: history ? [...history, { role: 'user', parts: [{ text: message }] }, { role: 'model', parts: [{ text: responseText }] }] : []
-    });
-  } catch (error: any) {
-    console.error('AI Error:', error);
-    res.status(500).json({ error: 'Failed to generate response' });
+  if (!message) {
+    return res.status(400).json({ error: 'Please enter a message.' });
   }
+  if (message.length > 4000) {
+    return res.status(413).json({ error: 'Please shorten your message to 4,000 characters or fewer.' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) {
+    return res.json({
+      response: offlineWebsiteAnswer(message),
+      fallback: true,
+      reason: 'AI_NOT_CONFIGURED'
+    });
+  }
+
+  const suppliedHistory = Array.isArray(req.body?.history) ? req.body.history : [];
+  let safeHistory = suppliedHistory
+    .filter((entry: any) =>
+      (entry?.role === 'user' || entry?.role === 'model') &&
+      Array.isArray(entry?.parts) &&
+      entry.parts.some((part: any) => typeof part?.text === 'string')
+    )
+    .map((entry: any) => ({
+      role: entry.role,
+      parts: entry.parts
+        .filter((part: any) => typeof part?.text === 'string')
+        .map((part: any) => ({ text: String(part.text).slice(0, 4000) }))
+    }))
+    .slice(-12);
+
+  // The SDK requires valid history to start with a user turn.
+  while (safeHistory.length > 0 && safeHistory[0].role !== 'user') {
+    safeHistory.shift();
+  }
+
+  const configuredModel = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: { 'User-Agent': 'eom-ai-assistant' }
+    }
+  });
+
+  let responseText = '';
+  let providerError: any = null;
+
+  // Retry only transient provider errors. Invalid credentials/model errors fail fast.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const chat = ai.chats.create({
+        model: configuredModel,
+        history: safeHistory,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.4
+        }
+      });
+      const result = await chat.sendMessage({ message });
+      responseText = result.text?.trim() || '';
+      if (!responseText) throw new Error('AI provider returned an empty answer.');
+      providerError = null;
+      break;
+    } catch (error: any) {
+      providerError = error;
+      const status = getProviderStatus(error);
+      const retryable = status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+      if (!retryable || attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+    }
+  }
+
+  if (providerError) {
+    const status = getProviderStatus(providerError);
+    // Log provider diagnostics server-side, without returning secrets to the browser.
+    console.error('[EOM AI] Request failed:', {
+      model: configuredModel,
+      status,
+      message: String(providerError?.message || 'Unknown provider error').slice(0, 500)
+    });
+
+    // Serve grounded website guidance for common questions if the live model is down.
+    return res.json({
+      response: offlineWebsiteAnswer(message),
+      fallback: true,
+      reason: status === 401 || status === 403
+        ? 'AI_PROVIDER_CONFIGURATION'
+        : status === 404
+          ? 'AI_MODEL_UNAVAILABLE'
+          : 'AI_TEMPORARILY_UNAVAILABLE'
+    });
+  }
+
+  res.json({
+    response: responseText,
+    history: [
+      ...safeHistory,
+      { role: 'user', parts: [{ text: message }] },
+      { role: 'model', parts: [{ text: responseText }] }
+    ]
+  });
 });
 
 export const aiRouter = router;

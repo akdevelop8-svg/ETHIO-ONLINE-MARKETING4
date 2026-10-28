@@ -4,6 +4,7 @@ import { Send, Users, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/common/Button';
 import { LoadingState } from '../components/common/StateViews';
+import { buildApiUrl } from '../api/client';
 
 interface CommunityMessage {
   id: string;
@@ -23,7 +24,7 @@ export const CommunityView: React.FC = () => {
 
   const fetchMessages = async () => {
     try {
-      const res = await fetch('/api/community/messages');
+      const res = await fetch(buildApiUrl('/community/messages'));
       const data = await res.json();
       setMessages(data);
     } catch (err) {
@@ -50,7 +51,7 @@ export const CommunityView: React.FC = () => {
 
     setIsSending(true);
     try {
-      const res = await fetch('/api/community/messages', {
+      const res = await fetch(buildApiUrl('/community/messages'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

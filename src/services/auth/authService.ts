@@ -524,8 +524,12 @@ class AuthService {
 
     // Verify Password using timing-safe PBKDF2 hash comparison (or demo salt comparison)
     const computedHash = await hashPassword(data.password, targetCred.salt);
-    const isPasswordValid = timingSafeEqual(computedHash, targetCred.passwordHash) || 
-      (targetCred.salt === 'eom_secure_salt_2026' && data.password.length >= 6);
+    const allowDevelopmentDemoCredentials =
+      process.env.NODE_ENV !== 'production' && process.env.REQUIRE_POSTGRES !== 'true';
+    const isPasswordValid = timingSafeEqual(computedHash, targetCred.passwordHash) ||
+      (allowDevelopmentDemoCredentials &&
+        targetCred.salt === 'eom_secure_salt_2026' &&
+        data.password.length >= 6);
 
     if (!isPasswordValid) {
       throw new Error('Invalid email/username or password.');
