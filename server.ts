@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import bodyParser from 'body-parser';
 import { pool } from './src/db/pg.js';
@@ -167,6 +166,7 @@ async function startServer() {
   app.use(errorHandlerMiddleware);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
