@@ -16,9 +16,24 @@ import { requireAuth, requireAdmin, AuthRequest } from '../middleware/authMiddle
 
 export const adminRouter = Router();
 
-adminRouter.get('/stats', requireAuth, requireAdmin, (req: AuthRequest, res: any) => {
+adminRouter.get('/stats', requireAuth, requireAdmin, async (req: AuthRequest, res: any) => {
   try {
     const stats = adminService.getDashboardMetrics(req.user as User);
+
+    // User registration is stored in the normalized PostgreSQL users table.
+    // The domain services intentionally use backend_storage, so their in-memory
+    // legacy auth vault must not be used as the production customer count.
+    if (pool) {
+      const result = await pool.query(`
+        SELECT
+          COUNT(*)::int AS total_users,
+          COUNT(*) FILTER (WHERE is_active = TRUE)::int AS active_users
+        FROM users
+      `);
+      stats.totalUsers = Number(result.rows[0]?.total_users ?? 0);
+      stats.activeUsers = Number(result.rows[0]?.active_users ?? 0);
+    }
+
     res.json(stats);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
