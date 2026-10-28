@@ -6,7 +6,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, AuthRole, SignUpData, SignInData, AuthSession, AuthModalView } from '../types';
-import { apiClient, getAuthHeaders } from '../api/client';
+import { apiClient, buildApiUrl, getAuthHeaders } from '../api/client';
 import { jwtDecode } from 'jwt-decode';
 
 export interface AuthContextType {
@@ -27,7 +27,7 @@ export interface AuthContextType {
   closeAuthModal: () => void;
   setAuthModalView: (view: AuthModalView) => void;
   login: (data: SignInData) => Promise<void>;
-  register: (data: SignUpData) => Promise<{ verificationCode: string }>;
+  register: (data: SignUpData) => Promise<void>;
   logout: () => Promise<void>;
   verifyEmail: (code: string) => Promise<void>;
   resendVerificationEmail: () => Promise<{ code: string }>;
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     resetToken: undefined
   });
 
-  // Restore stored session on mount
+  // Restore stored session from the same API origin used by every other request.
   useEffect(() => {
     let isMounted = true;
 
@@ -66,29 +66,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const token = localStorage.getItem('eom_token');
         if (token && isMounted) {
-            const decoded: any = jwtDecode(token);
-            if (decoded.exp * 1000 > Date.now()) {
-                const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
-                if (res.ok) {
-                   const { user } = await res.json();
-                   setUser(user);
-                   setSession({ token, user, expiresAt: new Date(decoded.exp * 1000).toISOString() });
-                }
-            } else {
-                localStorage.removeItem('eom_token');
+          const decoded: any = jwtDecode(token);
+          if (decoded.exp * 1000 > Date.now()) {
+            const res = await fetch(buildApiUrl('/auth/me'), { headers: getAuthHeaders() });
+            if (res.ok) {
+              const { user } = await res.json();
+              if (isMounted) {
+                setUser(user);
+                setSession({ token, user, expiresAt: new Date(decoded.exp * 1000).toISOString() });
+              }
+            } else if (res.status === 401 || res.status === 403) {
+              localStorage.removeItem('eom_token');
             }
+          } else {
+            localStorage.removeItem('eom_token');
+          }
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed to restore EOM session:', err);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     };
 
-    restoreSession();
-
+    void restoreSession();
     return () => {
       isMounted = false;
     };
@@ -131,6 +132,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const result: any = await apiClient.post('/auth/login', data);
+      if (!result?.token || !result?.user) {
+        throw new Error('Sign in succeeded without a valid session response. Please try again.');
+      }
       localStorage.setItem('eom_token', result.token);
       setUser(result.user);
       const decoded: any = jwtDecode(result.token);
@@ -145,13 +149,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       await apiClient.post('/auth/register', data);
-      
-      // Immediately log in after successful registration since email verification is disabled
+
+      // Email verification is disabled for EOM registrations. Sign in immediately
+      // after the backend confirms that the customer record has been persisted.
       await login({
         identifier: data.email,
         password: data.password
       });
-      
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await apiClient.post('/auth/logout');
     } catch {
-      // Ignore network errors on logout
+      // Clear local credentials even when the network is unavailable.
     } finally {
       localStorage.removeItem('eom_token');
       setUser(null);
@@ -248,4 +252,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
