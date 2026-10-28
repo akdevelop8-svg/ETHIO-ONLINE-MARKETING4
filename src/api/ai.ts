@@ -24,6 +24,33 @@ VERIFIED MARKETPLACE INFORMATION:
 TONE:
 Professional, respectful, concise, and helpful. Ask a short follow-up only when a required detail is missing.`;
 
+function offlineWebsiteAnswer(message: string): string {
+  const q = message.toLowerCase();
+  let answer: string | null = null;
+
+  if (/25\\s*%|fee|fees|commission|platform charge|ኮሚሽን|ክፍያ/.test(q)) {
+    answer = "The EOM platform fee is 25% of the order amount, and the seller payout is 75%. Funds stay in escrow until an authorized administrator verifies the account handover.";
+  } else if (/escrow|handover|account transfer|secure|ስክሮ|ደህንነት|ሂሳብ ማስተላለፍ/.test(q)) {
+    answer = "EOM uses an escrow workflow. Follow the order instructions, complete the account handover, and wait for an authorized administrator to review it before the transaction is completed.";
+  } else if (/sell|seller|listing|list an account|ለመሸጥ|መሸጥ|ሽያጭ|ማስታወቂያ/.test(q)) {
+    answer = "To sell, sign in and open the Sell area to submit your listing. New listings begin as pending review and become public only after an authorized administrator approves them.";
+  } else if (/buy|buyer|purchase|order|ግዛ|መግዛት|ግዢ|ትዕዛዝ/.test(q)) {
+    answer = "Browse the Marketplace, open the listing you want, then follow the order and payment instructions shown on the site.";
+  } else if (/telebirr|cbe|payment method|pay|payment|ክፈል|ቴሌብር|ባንክ|ክፍያ መንገድ/.test(q)) {
+    answer = "Telebirr and CBE are the primary payment options described by EOM. Follow the payment method shown in your order, and do not treat a payment as confirmed until the platform status is updated.";
+  } else if (/sign.?up|register|create account|sign.?in|login|password|username|መመዝገብ|መግባት|ይለፍ ቃል|መለያ/.test(q)) {
+    answer = "To register, enter your full name, email, username, and a password of at least 8 characters. Phone is optional. If you already have an account, choose Sign In; use Forgot Password if you need to reset your password.";
+  } else if (/admin|administrator|dashboard|አድሚን|ዳሽቦርድ/.test(q)) {
+    answer = "The admin dashboard is limited to authorized administrators. Regular customers should use the normal Sign Up and Sign In forms.";
+  } else if (/who (made|built|developed)|who created|developer|ያዘጋጀ|ማን ሰራ|ማን አዘጋጀ/.test(q)) {
+    answer = "Ethio Online Market was developed by AK DEVELOP ™.";
+  }
+
+  if (answer) {
+    return answer + "\\n\\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.";
+  }
+  return "The live AI model is temporarily unavailable, so I cannot reliably answer that specific question right now. I can still help with EOM registration, buying and selling listings, payment methods, the 25% platform fee, and escrow.";
+}
 const getProviderStatus = (error: any): number | undefined => {
   const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
   return Number.isFinite(status) && status > 0 ? status : undefined;
