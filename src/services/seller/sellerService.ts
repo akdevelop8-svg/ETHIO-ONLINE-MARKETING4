@@ -136,10 +136,6 @@ class SellerService {
     this.profiles[user.id] = profile;
     this.persist();
 
-    // Log seller registration/update
-    this.payoutRequests.unshift(req);
-    this.persist();
-
     auditService.log({
       actorId: user.id,
       actorName: user.fullName || user.email,
@@ -248,6 +244,11 @@ class SellerService {
       status: 'PROCESSING',
       requestedAt: timestamp
     };
+
+    // Persist the payout request in the correct flow so Admin → Payments
+    // can review it after refreshes and backend restarts.
+    this.payoutRequests.unshift(req);
+    this.persist();
 
     auditService.log({
       actorId: user.id,
