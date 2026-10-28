@@ -1,16 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { pool } from './src/db/pg.js';
-import { PostgresPersistenceAdapter } from './src/services/persistence/postgresAdapter.js';
-import { setStorageAdapter } from './src/services/persistence/index.js';
-import { runMigrations } from './src/db/migrations.js';
+import { pool } from './db/pg.js';
+import { PostgresPersistenceAdapter } from './services/persistence/postgresAdapter.js';
+import { setStorageAdapter } from './services/persistence/index.js';
+import { runMigrations } from './db/migrations.js';
 import {
   securityHeadersMiddleware,
   correlationIdMiddleware,
   errorHandlerMiddleware
-} from './src/middleware/securityMiddleware.js';
-import { generalApiRateLimiter } from './src/middleware/rateLimiter.js';
+} from './middleware/securityMiddleware.js';
+import { generalApiRateLimiter } from './middleware/rateLimiter.js';
 
 // The persistence layer is synchronous for existing domain services. On Vercel,
 // refresh it from PostgreSQL and serialize API requests across function instances
@@ -64,17 +64,17 @@ export async function createApp(): Promise<express.Express> {
     { notificationsRouter },
     { sellerRouter }
   ] = await Promise.all([
-    import('./src/api/auth.js'),
-    import('./src/api/admin.js'),
-    import('./src/api/transactions.js'),
-    import('./src/api/listings.js'),
-    import('./src/api/orders.js'),
-    import('./src/api/disputes.js'),
-    import('./src/api/webhooks.js'),
-    import('./src/api/ai.js'),
-    import('./src/api/community.js'),
-    import('./src/api/notifications.js'),
-    import('./src/api/seller.js')
+    import('./api/auth.js'),
+    import('./api/admin.js'),
+    import('./api/transactions.js'),
+    import('./api/listings.js'),
+    import('./api/orders.js'),
+    import('./api/disputes.js'),
+    import('./api/webhooks.js'),
+    import('./api/ai.js'),
+    import('./api/community.js'),
+    import('./api/notifications.js'),
+    import('./api/seller.js')
   ]);
 
   const app = express();
