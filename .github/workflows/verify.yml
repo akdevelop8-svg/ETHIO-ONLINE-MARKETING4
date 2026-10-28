@@ -1,10 +1,10 @@
-name: Verify EOM
+name: Verify EOM Vercel deployment
 
 on:
   push:
     branches:
       - main
-      - fix/api-404-supabase-persistence
+      - vercel-supabase-serverless
   pull_request:
     branches:
       - main
@@ -24,7 +24,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --include=dev --no-audit --no-fund
+      - name: Validate Vercel deployment configuration
+        run: node -e "JSON.parse(require('node:fs').readFileSync('vercel.json', 'utf8')); JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')); console.log('Deployment JSON is valid')"
       - name: Type-check
         run: npm run lint
-      - name: Build application and backend
+      - name: Build Vite frontend
         run: npm run build

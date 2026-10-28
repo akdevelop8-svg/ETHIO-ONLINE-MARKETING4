@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const { Pool } = pg;
+const isVercelRuntime = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
 
 /**
  * Validates whether a provided connection string is a well-formed PostgreSQL URL.
@@ -30,9 +31,7 @@ export function isValidPostgresUrl(urlStr?: string): boolean {
   }
 }
 
-/**
- * Returns safe connection metadata without exposing passwords or query parameters.
- */
+/** Returns safe connection metadata without exposing passwords or query parameters. */
 export function getSanitizedDbInfo(): { isConfigured: boolean; host?: string; database?: string; port?: string } {
   const dbUrl = process.env.DATABASE_URL;
   if (!isValidPostgresUrl(dbUrl)) return { isConfigured: false };
@@ -52,6 +51,12 @@ export function getSanitizedDbInfo(): { isConfigured: boolean; host?: string; da
 
 export let pool: pg.Pool | null = null;
 
+/**
+ * Separate one-connection pool for the serverless request mutex. Normal SQL
+ * runs through pool while the mutex transaction remains open on its own connection.
+ */
+export let requestLockPool: pg.Pool | null = null;
+
 const dbUrl = process.env.DATABASE_URL;
 
 if (isValidPostgresUrl(dbUrl)) {
@@ -66,24 +71,41 @@ if (isValidPostgresUrl(dbUrl)) {
       connectionUrl.searchParams.set('sslmode', 'require');
     }
 
-    pool = new Pool({
-      connectionString: connectionUrl.toString(),
-      max: 10,
-      idleTimeoutMillis: 30000,
+    const connectionString = connectionUrl.toString();
+    const poolOptions = {
+      connectionString,
+      // Serverless instances are short-lived and multiplied by traffic. Keep
+      // each application pool at one connection to avoid exhausting Supabase.
+      max: isVercelRuntime ? 1 : 10,
+      idleTimeoutMillis: isVercelRuntime ? 10000 : 30000,
       connectionTimeoutMillis: 5000,
-      application_name: 'ethio-online-market'
-    });
+      application_name: 'ethio-online-market',
+      allowExitOnIdle: isVercelRuntime
+    };
 
+    pool = new Pool(poolOptions);
     pool.on('error', (err) => {
       console.error('PostgreSQL idle client error:', err.message);
     });
+
+    if (isVercelRuntime) {
+      requestLockPool = new Pool({
+        ...poolOptions,
+        max: 1,
+        application_name: 'ethio-online-market-request-lock'
+      });
+      requestLockPool.on('error', (err) => {
+        console.error('PostgreSQL request-lock client error:', err.message);
+      });
+    }
   } catch (err: any) {
     console.error('Failed to initialize PostgreSQL pool:', err?.message || 'Unknown error');
     pool = null;
+    requestLockPool = null;
   }
 } else {
   if (dbUrl) {
-    console.warn('DATABASE_URL is not a valid PostgreSQL URL. Configure the real Supabase/managed PostgreSQL connection URI.');
+    console.warn('DATABASE_URL is not a valid PostgreSQL URL. Configure the real Supabase PostgreSQL connection URI.');
   } else {
     console.warn('DATABASE_URL not set. Persistent database storage is unavailable in this environment.');
   }
