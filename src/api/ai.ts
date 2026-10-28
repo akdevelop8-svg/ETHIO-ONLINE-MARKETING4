@@ -47,7 +47,7 @@ function offlineWebsiteAnswer(message: string): string {
   }
 
   if (answer) {
-    return answer + "\\n\\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.";
+    return answer + "\n\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.";
   }
   return "The live AI model is temporarily unavailable, so I cannot reliably answer that specific question right now. I can still help with EOM registration, buying and selling listings, payment methods, the 25% platform fee, and escrow.";
 }
@@ -68,8 +68,10 @@ router.post('/chat', async (req, res) => {
 
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
-    return res.status(503).json({
-      error: 'AI assistant is not configured. Set GEMINI_API_KEY on the backend server.'
+    return res.json({
+      response: offlineWebsiteAnswer(message),
+      fallback: true,
+      reason: 'AI_NOT_CONFIGURED'
     });
   }
 
@@ -131,29 +133,22 @@ router.post('/chat', async (req, res) => {
 
   if (providerError) {
     const status = getProviderStatus(providerError);
+    // Log provider diagnostics server-side, without returning secrets to the browser.
     console.error('[EOM AI] Request failed:', {
       model: configuredModel,
       status,
       message: String(providerError?.message || 'Unknown provider error').slice(0, 500)
     });
 
-    if (status === 404) {
-      return res.status(502).json({
-        error: 'The configured AI model is unavailable. Check GEMINI_MODEL on the backend server.'
-      });
-    }
-    if (status === 401 || status === 403) {
-      return res.status(502).json({
-        error: 'The AI provider rejected the server credentials. Check GEMINI_API_KEY in backend environment settings.'
-      });
-    }
-    if (status === 429 || status === 503 || status === 504) {
-      return res.status(503).json({
-        error: 'The AI service is temporarily busy. Please try again in a moment.'
-      });
-    }
-    return res.status(502).json({
-      error: 'The AI service could not complete this message. Please try again shortly.'
+    // Serve grounded website guidance for common questions if the live model is down.
+    return res.json({
+      response: offlineWebsiteAnswer(message),
+      fallback: true,
+      reason: status === 401 || status === 403
+        ? 'AI_PROVIDER_CONFIGURATION'
+        : status === 404
+          ? 'AI_MODEL_UNAVAILABLE'
+          : 'AI_TEMPORARILY_UNAVAILABLE'
     });
   }
 
