@@ -14,7 +14,7 @@ export async function runMigrations() {
     
     if (!fs.existsSync(schemaPath)) {
       console.error(`❌ Schema file not found at ${schemaPath}`);
-      if (process.env.NODE_ENV === 'production') throw new Error(`Schema file not found at ${schemaPath}`);
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') throw new Error(`Schema file not found at ${schemaPath}`);
       return;
     }
 
@@ -25,6 +25,6 @@ export async function runMigrations() {
     console.log('✅ Database migrations applied successfully.');
   } catch (error: any) {
     console.error('❌ Error applying database migrations:', error.message);
-    if (process.env.NODE_ENV === 'production') throw error;
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') throw error;
   }
 }
