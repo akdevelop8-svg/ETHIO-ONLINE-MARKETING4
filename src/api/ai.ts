@@ -26,31 +26,47 @@ Professional, respectful, concise, and helpful. Ask a short follow-up only when 
 
 function offlineWebsiteAnswer(message: string): string {
   const q = message.toLowerCase();
+  const isAmharic = /[\u1200-\u137F]/.test(message);
   let answer: string | null = null;
+  let answerAm: string | null = null;
 
-  if (/25\\s*%|fee|fees|commission|platform charge|ኮሚሽን|ክፍያ/.test(q)) {
+  if (/25\s*%|fee|fees|commission|platform charge|ኮሚሽን|ክፍያ/.test(q)) {
     answer = "The EOM platform fee is 25% of the order amount, and the seller payout is 75%. Funds stay in escrow until an authorized administrator verifies the account handover.";
+    answerAm = "የEOM መድረክ ክፍያ ከጠቅላላ የትዕዛዝ ዋጋ 25% ነው፤ ሻጩ 75% ይቀበላል። የአካውንት ማስተላለፍ በተፈቀደለት አድሚን እስኪረጋገጥ ገንዘቡ escrow ውስጥ ይቆያል።";
   } else if (/escrow|handover|account transfer|secure|ስክሮ|ደህንነት|ሂሳብ ማስተላለፍ/.test(q)) {
     answer = "EOM uses an escrow workflow. Follow the order instructions, complete the account handover, and wait for an authorized administrator to review it before the transaction is completed.";
+    answerAm = "EOM escrow ሂደት ይጠቀማል። የትዕዛዙን መመሪያ ይከተሉ፣ የአካውንቱን ማስተላለፍ ያጠናቅቁ፣ ከዚያም ግብይቱ ከመጠናቀቁ በፊት በተፈቀደለት አድሚን እስኪመረመር ይጠብቁ።";
   } else if (/sell|seller|listing|list an account|ለመሸጥ|መሸጥ|ሽያጭ|ማስታወቂያ/.test(q)) {
     answer = "To sell, sign in and open the Sell area to submit your listing. New listings begin as pending review and become public only after an authorized administrator approves them.";
+    answerAm = "ለመሸጥ መጀመሪያ ይግቡና Sell የሚለውን ክፍል ከፍተው ማስታወቂያዎን ያስገቡ። አዲስ ማስታወቂያ መጀመሪያ Pending Review ላይ ይቆያል፤ በአድሚን ከተፈቀደ በኋላ በገበያው ይታያል።";
   } else if (/buy|buyer|purchase|order|ግዛ|መግዛት|ግዢ|ትዕዛዝ/.test(q)) {
     answer = "Browse the Marketplace, open the listing you want, then follow the order and payment instructions shown on the site.";
+    answerAm = "በMarketplace ውስጥ ያሉትን ማስታወቂያዎች ይመልከቱ፣ የሚፈልጉትን ይክፈቱ፣ ከዚያም በድረገጹ ላይ የታዩትን የትዕዛዝና የክፍያ መመሪያዎች ይከተሉ።";
   } else if (/telebirr|cbe|payment method|pay|payment|ክፈል|ቴሌብር|ባንክ|ክፍያ መንገድ/.test(q)) {
     answer = "Telebirr and CBE are the primary payment options described by EOM. Follow the payment method shown in your order, and do not treat a payment as confirmed until the platform status is updated.";
+    answerAm = "EOM ዋና የክፍያ አማራጮች Telebirr እና CBE ናቸው። በትዕዛዝዎ ላይ የታየውን የክፍያ መመሪያ ይከተሉ፤ በድረገጹ ላይ ሁኔታው እስኪዘመን ክፍያ ተረጋግጧል ብለው አይቁጠሩ።";
   } else if (/sign.?up|register|create account|sign.?in|login|password|username|መመዝገብ|መግባት|ይለፍ ቃል|መለያ/.test(q)) {
     answer = "To register, enter your full name, email, username, and a password of at least 8 characters. Phone is optional. If you already have an account, choose Sign In; use Forgot Password if you need to reset your password.";
+    answerAm = "ለመመዝገብ ሙሉ ስምዎን፣ ኢሜይልዎን፣ username እና ቢያንስ 8 ቁምፊዎች ያሉትን የይለፍ ቃል ያስገቡ። ስልክ ቁጥር አማራጭ ነው። መለያ ካለዎት Sign In ይጠቀሙ፤ የይለፍ ቃልን ለመቀየር Forgot Password ይምረጡ።";
   } else if (/admin|administrator|dashboard|አድሚን|ዳሽቦርድ/.test(q)) {
     answer = "The admin dashboard is limited to authorized administrators. Regular customers should use the normal Sign Up and Sign In forms.";
+    answerAm = "የአድሚን ዳሽቦርድ ለተፈቀደላቸው አስተዳዳሪዎች ብቻ ነው። መደበኛ ደንበኞች መደበኛውን Sign Up እና Sign In መጠቀም አለባቸው።";
   } else if (/who (made|built|developed)|who created|developer|ያዘጋጀ|ማን ሰራ|ማን አዘጋጀ/.test(q)) {
     answer = "Ethio Online Market was developed by AK DEVELOP ™.";
+    answerAm = "Ethio Online Market የተሰራው በAK DEVELOP ™ ነው።";
   }
 
-  if (answer) {
-    return answer + "\n\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.";
+  const finalAnswer = isAmharic ? answerAm : answer;
+  if (finalAnswer) {
+    return finalAnswer + (isAmharic
+      ? "\n\nየቀጥታ AI አገልግሎቱ ለጊዜው አይሰራም፤ ይህ መልስ ከድረገጹ የእገዛ መረጃ የተዘጋጀ ነው።"
+      : "\n\nThe live AI model is temporarily unavailable, so this answer uses the website's built-in help information.");
   }
-  return "The live AI model is temporarily unavailable, so I cannot reliably answer that specific question right now. I can still help with EOM registration, buying and selling listings, payment methods, the 25% platform fee, and escrow.";
+  return isAmharic
+    ? "የቀጥታ AI አገልግሎቱ ለጊዜው አይሰራም፣ ስለዚህ ለዚህ ጥያቄ ትክክለኛ መልስ አሁን መስጠት አልችልም። ስለ መመዝገብ፣ መግዛትና መሸጥ፣ ክፍያ፣ 25% የመድረክ ክፍያ እና escrow ልረዳዎ እችላለሁ።"
+    : "The live AI model is temporarily unavailable, so I cannot reliably answer that specific question right now. I can still help with EOM registration, buying and selling listings, payment methods, the 25% platform fee, and escrow.";
 }
+
 const getProviderStatus = (error: any): number | undefined => {
   const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
   return Number.isFinite(status) && status > 0 ? status : undefined;
