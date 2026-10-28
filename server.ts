@@ -17,18 +17,22 @@ import { generalApiRateLimiter } from './src/middleware/rateLimiter.js';
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
-  // Run Database Migrations before anything else
+  const requirePostgres = process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true';
+
+  // Refuse to launch a production instance that would silently lose data on restart.
+  if (requirePostgres && !pool) {
+    throw new Error('DATABASE_URL is missing or invalid while REQUIRE_POSTGRES=true. Configure the Supabase PostgreSQL connection URI.');
+  }
+
   if (pool) {
     await runMigrations();
   }
 
-  // Initialize Postgres cache if on server (sync-ish loading on boot)
   const adapter = new PostgresPersistenceAdapter();
   await adapter.loadAllFromDatabase();
   setStorageAdapter(adapter);
 
-  // IMPORTANT: import domain routers only after the persistence adapter is ready.
-  // Their singleton services capture repository instances at module initialization.
+  // Import domain routers only after the persistence adapter is ready.
   const [
     { authRouter },
     { adminRouter },
@@ -57,32 +61,38 @@ async function startServer() {
 
   const app = express();
 
-  // CORS Security Configuration
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-    : '*';
+  // When CORS_ORIGIN is set, it may contain a comma-separated allowlist.
+  // If unset, reflect request origins rather than combining wildcard + credentials.
+  const allowedOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-  app.use(
-    cors({
-      origin: allowedOrigins,
-      credentials: true
-    })
-  );
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(origin)
+      ) {
+        return callback(null, origin);
+      }
+      return callback(new Error('Origin is not allowed by the EOM CORS configuration.'));
+    },
+    credentials: true
+  }));
 
-  // Security Headers & Request Correlation IDs
   app.use(securityHeadersMiddleware);
   app.use(correlationIdMiddleware);
 
-  // Request Payload Limits
   app.use(express.json({ limit: '12mb' }));
   app.use(express.urlencoded({ extended: true, limit: '12mb' }));
   app.use(bodyParser.json({ limit: '12mb' }));
 
-  // Global Rate Limiting for API routes
   app.use('/api', generalApiRateLimiter);
 
-  // 1. API Health & Status Monitoring
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
       environment: process.env.NODE_ENV || 'development',
@@ -91,49 +101,51 @@ async function startServer() {
     });
   });
 
-  // DB Health check
-  app.get('/api/health/db', async (req, res) => {
+  app.get('/api/health/db', async (_req, res) => {
     try {
       if (pool) {
         const result = await pool.query('SELECT NOW() as db_time');
-        res.json({
+        return res.json({
           status: 'connected',
           dbTime: result.rows[0].db_time,
           poolActive: true
         });
-      } else {
-        if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true') {
-          return res.status(503).json({
-            status: 'unhealthy',
-            error: 'Database connection pool unavailable in production mode'
-          });
-        }
-        res.json({ status: 'simulated', poolActive: false });
       }
+
+      if (requirePostgres) {
+        return res.status(503).json({
+          status: 'unhealthy',
+          error: 'Database connection pool unavailable in production mode'
+        });
+      }
+
+      return res.json({ status: 'simulated', poolActive: false });
     } catch (err: any) {
-      res.status(503).json({
+      console.error('Database health check failed:', err?.message || err);
+      return res.status(503).json({
         status: 'unhealthy',
-        error: 'Database query failed',
-        message: err.message
+        error: 'Database query failed'
       });
     }
   });
 
-  // Alias for backward compatibility
-  app.get('/api/db-status', async (req, res) => {
+  // Backward-compatible health alias.
+  app.get('/api/db-status', async (_req, res) => {
     try {
       if (pool) {
         const result = await pool.query('SELECT NOW()');
-        res.json({ status: 'connected', time: result.rows[0].now });
-      } else {
-        res.json({ status: 'simulated' });
+        return res.json({ status: 'connected', time: result.rows[0].now });
       }
+      if (requirePostgres) {
+        return res.status(503).json({ status: 'unhealthy', error: 'Database is required but not configured.' });
+      }
+      return res.json({ status: 'simulated' });
     } catch (err: any) {
-      res.status(500).json({ status: 'error', error: err.message });
+      console.error('Database status check failed:', err?.message || err);
+      return res.status(503).json({ status: 'error', error: 'Database query failed' });
     }
   });
 
-  // 2. API Routers
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/transactions', transactionsRouter);
@@ -146,10 +158,13 @@ async function startServer() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/seller', sellerRouter);
 
-  // 3. Centralized Production Error Handler
+  // Unknown API paths should return a JSON 404, never the SPA index.html.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'EOM API endpoint not found. Check the API route and backend deployment.' });
+  });
+
   app.use(errorHandlerMiddleware);
 
-  // 4. Frontend Vite / Static Assets
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -159,7 +174,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -168,11 +183,15 @@ async function startServer() {
     console.log(`EOM Server running on port ${PORT} [Mode: ${process.env.NODE_ENV || 'development'}]`);
   });
 
-  // 5. Graceful Shutdown
   const shutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}. Initiating EOM server graceful shutdown...`);
     server.close(async () => {
       console.log('HTTP server closed.');
+      try {
+        await adapter.flushPendingWrites();
+      } catch (err: any) {
+        console.error('Failed to flush pending PostgreSQL writes:', err?.message || err);
+      }
       if (pool) {
         await pool.end();
         console.log('PostgreSQL connection pool closed successfully.');
@@ -181,8 +200,11 @@ async function startServer() {
     });
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-startServer();
+startServer().catch((err: any) => {
+  console.error('EOM startup failed:', err?.message || err);
+  process.exitCode = 1;
+});
