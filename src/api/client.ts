@@ -52,7 +52,7 @@ export const apiClient = {
           : '';
 
       const message = backendMessage || (res.status === 404
-        ? 'API route not found (404). If your frontend and backend use different hosts, set VITE_API_BASE_URL to the backend origin and redeploy the frontend.'
+        ? 'API route not found (404). Check that the Vercel API Functions were deployed and the project root is the repository root.'
         : `API Error: ${res.status} ${res.statusText}`);
 
       throw new Error(message);
