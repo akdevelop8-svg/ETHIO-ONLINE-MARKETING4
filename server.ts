@@ -14,7 +14,8 @@ import {
 } from './src/middleware/securityMiddleware.js';
 import { generalApiRateLimiter } from './src/middleware/rateLimiter.js';
 
-const PORT = process.env.PORT || 3000;
+const parsedPort = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 
 async function startServer() {
   const requirePostgres = process.env.NODE_ENV === 'production' && process.env.REQUIRE_POSTGRES === 'true';
