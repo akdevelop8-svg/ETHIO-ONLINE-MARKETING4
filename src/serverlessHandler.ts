@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { createApp } from '../server.js';
+import { createApp } from './createApp.js';
 
 let appPromise: Promise<import('express').Express> | undefined;
 
