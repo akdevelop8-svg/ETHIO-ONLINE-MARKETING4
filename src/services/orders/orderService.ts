@@ -3,14 +3,14 @@
  * Phase 2 - 8: Platform Operations & Escrow Lifecycle
  */
 
-import { Order, OrderStatus, EscrowStatus, PaymentMethodType, User, Listing, DisputeTicket } from '../../types';
-import { PLATFORM_FEE_PERCENTAGE } from '../../constants';
-import { authService } from '../auth/authService';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { listingService } from '../marketplace/listingService';
-import { transactionService } from '../transactions/transactionService';
-import { orderRepository, defaultStorageAdapter, OrderRepository } from '../persistence';
+import { Order, OrderStatus, EscrowStatus, PaymentMethodType, User, Listing, DisputeTicket } from '../../types/index.js';
+import { PLATFORM_FEE_PERCENTAGE } from '../../constants/index.js';
+import { authService } from '../auth/authService.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { listingService } from '../marketplace/listingService.js';
+import { transactionService } from '../transactions/transactionService.js';
+import { orderRepository, defaultStorageAdapter, OrderRepository } from '../persistence/index.js';
 
 const STORAGE_ORDERS_KEY = 'eom_orders_vault_v2';
 const STORAGE_DISPUTES_KEY = 'eom_disputes_vault_v1';
