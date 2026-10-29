@@ -54,7 +54,7 @@ export const apiClient = {
 
       // Never expose deployment providers, filesystem paths, SQL details, or
       // server initialization diagnostics in customer-facing messages.
-      const containsInternalDetails = /vercel|supabase|database_url|api endpoint|api initialization|failed to start|cannot find module|\\/var\\/task|runtime logs|environment variables|sql schema|internal server/i.test(backendMessage);
+      const containsInternalDetails = /vercel|supabase|database_url|api endpoint|api initialization|failed to start|cannot find module|\/var\/task|runtime logs|environment variables|sql schema|internal server/i.test(backendMessage);
       const message = res.status >= 500 || containsInternalDetails
         ? 'Something went wrong. Please try again.'
         : backendMessage || (res.status === 404
