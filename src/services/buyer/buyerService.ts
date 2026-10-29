@@ -3,9 +3,9 @@
  * Phase 6: Buyer System, Saved Channels, Preferences & Activity
  */
 
-import { User, Listing, BuyerProfile, ListingCategory, PaymentMethodType } from '../../types';
-import { listingService } from '../marketplace/listingService';
-import { auditService } from '../audit/auditService';
+import { User, Listing, BuyerProfile, ListingCategory, PaymentMethodType } from '../../types/index.js';
+import { listingService } from '../marketplace/listingService.js';
+import { auditService } from '../audit/auditService.js';
 
 const STORAGE_FAVORITES_PREFIX = 'eom_buyer_favs_';
 const STORAGE_BUYER_PROFILE_PREFIX = 'eom_buyer_profile_';
