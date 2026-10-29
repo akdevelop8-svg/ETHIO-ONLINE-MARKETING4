@@ -51,8 +51,10 @@ export const AiAssistant: React.FC = () => {
       const messageText = error instanceof Error ? error.message : '';
       let userMessageText = 'ይቅርታ፣ ለዚህ ጥያቄ መልስ ማመንጨት አልተሳካም። እባክዎ እንደገና ይሞክሩ።';
 
-      if (/VITE_API_BASE_URL|API (route|endpoint) not found|404/i.test(messageText)) {
-        userMessageText = 'የAI ሰርቨሩ አልተገናኘም። የድረገጹ አስተዳዳሪ VITE_API_BASE_URL በfrontend hosting ላይ ወደ backend server እንዲያመለክት ማድረግ አለበት።';
+      if (/API endpoint not found|API route not found|404/i.test(messageText)) {
+        userMessageText = 'የAI API መንገድ በዚህ Vercel deployment ላይ አልተገኘም። የመጨረሻው deployment ከትክክለኛው GitHub repository መሆኑን እና api/[...path].ts መካተቱን ያረጋግጡ።';
+      } else if (/DATABASE_URL|JWT_SECRET|ADMIN_PASSWORD|Supabase|API is not ready|API startup|schema/i.test(messageText)) {
+        userMessageText = 'የbackend API ማስነሳት አልተሳካም። Vercel Environment Variables ውስጥ DATABASE_URL፣ JWT_SECRET፣ ADMIN_PASSWORD እና Supabase database connection መፈተሽ ያስፈልጋል።';
       } else if (/GEMINI_API_KEY|AI assistant is not configured/i.test(messageText)) {
         userMessageText = 'የAI አገልግሎቱ ገና አልተዘጋጀም። አስተዳዳሪው GEMINI_API_KEY በbackend server ላይ ማስገባት አለበት።';
       } else if (/GEMINI_MODEL|model is unavailable|configured AI model/i.test(messageText)) {
