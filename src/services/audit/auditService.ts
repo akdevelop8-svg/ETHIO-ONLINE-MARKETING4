@@ -5,9 +5,9 @@
  * Enforces sanitization to ensure passwords and credentials are never stored.
  */
 
-import { AuditLog, User, UserRole, AuthRole } from '../../types';
-import { authService } from '../auth/authService';
-import { auditRepository, AuditRepository } from '../persistence';
+import { AuditLog, User, UserRole, AuthRole } from '../../types/index.js';
+import { authService } from '../auth/authService.js';
+import { auditRepository, AuditRepository } from '../persistence/index.js';
 
 const STORAGE_AUDIT_KEY = 'eom_audit_log_v2';
 
