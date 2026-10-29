@@ -31,7 +31,7 @@ export default async function handler(_req: Request, res: Response): Promise<voi
       status: 'unhealthy',
       code: 'DATABASE_QUERY_FAILED',
       databaseConfigured: true,
-      error: 'The database URL is configured, but the query failed. Check Vercel Runtime Logs.'
+      error: 'The service is temporarily unavailable. Please try again.'
     });
   }
 }
