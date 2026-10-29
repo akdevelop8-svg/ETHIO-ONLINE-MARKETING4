@@ -36,7 +36,7 @@ function installServerlessPersistenceMiddleware(app: Express, adapter: PostgresP
     if (shouldSkipServerlessStorageLock(req.originalUrl)) return next();
 
     if (!pool || !requestLockPool) {
-      return res.status(503).json({ error: 'Persistent database is unavailable. Check the Vercel DATABASE_URL setting.' });
+      return res.status(503).json({ error: 'The service is temporarily unavailable. Please try again.' });
     }
 
     let lockClient: import('pg').PoolClient | undefined;
