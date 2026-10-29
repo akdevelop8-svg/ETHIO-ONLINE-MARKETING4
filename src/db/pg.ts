@@ -67,8 +67,21 @@ if (isValidPostgresUrl(dbUrl)) {
 
     // Supabase PostgreSQL requires TLS. Add sslmode=require when the supplied
     // connection URI did not already specify an SSL mode.
-    if (isSupabaseHost && !connectionUrl.searchParams.has('sslmode')) {
-      connectionUrl.searchParams.set('sslmode', 'require');
+    if (isSupabaseHost) {
+      const sslMode = connectionUrl.searchParams.get('sslmode')?.toLowerCase();
+      if (!sslMode) {
+        connectionUrl.searchParams.set('sslmode', 'require');
+      }
+
+      // Recent pg-connection-string versions interpret sslmode=require as
+      // full certificate verification unless libpq compatibility is enabled.
+      // Supabase's default/root certificate is private, so that can fail with
+      // SELF_SIGNED_CERT_IN_CHAIN. Compatibility keeps TLS encryption required
+      // while giving sslmode=require its documented libpq meaning. For strict
+      // certificate verification, use sslmode=verify-full with Supabase's CA.
+      if (!sslMode || sslMode === 'require') {
+        connectionUrl.searchParams.set('uselibpqcompat', 'true');
+      }
     }
 
     const connectionString = connectionUrl.toString();
