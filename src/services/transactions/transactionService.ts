@@ -20,20 +20,20 @@ import {
   PayoutStatus,
   TransactionRefundRecord,
   SellerPayoutRecord
-} from '../../types';
-import { PLATFORM_FEE_PERCENTAGE, OFFICIAL_ESCROW_ACCOUNTS } from '../../constants';
-import { authService } from '../auth/authService';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { listingService } from '../marketplace/listingService';
+} from '../../types/index.js';
+import { PLATFORM_FEE_PERCENTAGE, OFFICIAL_ESCROW_ACCOUNTS } from '../../constants/index.js';
+import { authService } from '../auth/authService.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { listingService } from '../marketplace/listingService.js';
 import { 
   transactionRepository, 
   paymentVerificationRepository,
   TransactionRepository,
   PaymentVerificationRepository
-} from '../persistence';
-import { PaymentVerificationEngine } from '../payments/paymentVerification';
-import { PaymentProviderRegistry } from '../payments/paymentProvider';
+} from '../persistence/index.js';
+import { PaymentVerificationEngine } from '../payments/paymentVerification.js';
+import { PaymentProviderRegistry } from '../payments/paymentProvider.js';
 
 const STORAGE_TRANSACTIONS_KEY = 'eom_transactions_vault_v1';
 
