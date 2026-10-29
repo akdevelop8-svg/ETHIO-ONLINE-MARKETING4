@@ -15,8 +15,8 @@
  * - Provides audit trails for compliance, dispute arbitration, and platform transparency
  */
 
-import { User, UserRole, AuthRole } from '../../types';
-import { auditRepository, AuditRepository } from '../persistence';
+import { User, UserRole, AuthRole } from '../../types/index.js';
+import { auditRepository, AuditRepository } from '../persistence/index.js';
 
 export interface AdminActionRecord {
   id: string;
