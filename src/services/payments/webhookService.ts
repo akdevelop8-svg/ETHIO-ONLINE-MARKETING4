@@ -4,13 +4,13 @@
  */
 
 import crypto from 'crypto';
-import { transactionService } from '../transactions/transactionService';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { PaymentProviderRegistry, ProviderConnectionStatus } from './paymentProvider';
-import { BaseRepository, Identifiable } from '../persistence/repository';
-import { defaultStorageAdapter } from '../persistence';
-import { User } from '../../types';
+import { transactionService } from '../transactions/transactionService.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { PaymentProviderRegistry, ProviderConnectionStatus } from './paymentProvider.js';
+import { BaseRepository, Identifiable } from '../persistence/repository.js';
+import { defaultStorageAdapter } from '../persistence/index.js';
+import { User } from '../../types/index.js';
 
 export interface WebhookEventRecord extends Identifiable {
   id: string;
