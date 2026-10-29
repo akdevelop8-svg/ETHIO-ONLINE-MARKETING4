@@ -11,10 +11,10 @@
  * - Admin authorization gatekeeper
  */
 
-import { User, SignUpData, SignInData, AuthSession, AuthRole, UserRole } from '../../types';
-import { hashPassword, generateSalt, generateSecureToken, generateNumericCode, timingSafeEqual } from './crypto';
-import { validateEmail, validateEthiopianPhone, validatePassword, validateFullName } from './validators';
-import { defaultStorageAdapter } from '../persistence';
+import { User, SignUpData, SignInData, AuthSession, AuthRole, UserRole } from '../../types/index.js';
+import { hashPassword, generateSalt, generateSecureToken, generateNumericCode, timingSafeEqual } from './crypto.js';
+import { validateEmail, validateEthiopianPhone, validatePassword, validateFullName } from './validators.js';
+import { defaultStorageAdapter } from '../persistence/index.js';
 
 const STORAGE_USERS_KEY = 'eom_auth_users_vault_v1';
 const STORAGE_SESSION_KEY = 'eom_auth_current_session_v1';
