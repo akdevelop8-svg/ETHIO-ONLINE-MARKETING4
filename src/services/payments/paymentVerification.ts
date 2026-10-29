@@ -3,7 +3,7 @@
  * Phase 10: Production Backend & Persistent Data Foundation
  */
 
-import { PaymentVerificationRecord } from '../persistence/repository';
+import { PaymentVerificationRecord } from '../persistence/repository.js';
 
 export type VerificationState = 'PENDING' | 'SUBMITTED' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
 
