@@ -4,9 +4,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/*.ts": {
-      "includeFiles": "src/db/schema.sql"
-    },
     "api/**/*.ts": {
       "includeFiles": "src/db/schema.sql"
     }
