@@ -3,10 +3,10 @@
  * Phase 5: Seller Onboarding, Profile, Verification & Payout Management
  */
 
-import { User, SellerProfile, VerificationBadgeType, PayoutStatus } from '../../types';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { defaultStorageAdapter } from '../persistence/index';
+import { User, SellerProfile, VerificationBadgeType, PayoutStatus } from '../../types/index.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { defaultStorageAdapter } from '../persistence/index.js';
 
 const STORAGE_SELLER_PROFILES_KEY = 'eom_seller_profiles_v1';
 
