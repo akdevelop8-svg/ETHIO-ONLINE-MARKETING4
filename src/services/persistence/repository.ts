@@ -3,7 +3,7 @@
  * Phase 10: Production Backend & Persistent Data Foundation
  */
 
-import { IPersistenceAdapter } from './persistenceAdapter';
+import { IPersistenceAdapter } from './persistenceAdapter.js';
 import { 
   Transaction, 
   Order, 
@@ -11,7 +11,7 @@ import {
   Dispute, 
   AuditLog, 
   AppNotification 
-} from '../../types';
+} from '../../types/index.js';
 
 export interface Identifiable {
   id: string;
