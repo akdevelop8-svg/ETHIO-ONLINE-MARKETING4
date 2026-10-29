@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { getEomApp } from '../src/server/eomApp.js';
+import { pool, getSanitizedDbInfo } from '../src/db/pg.js';
 
 type StartupDiagnostic = { code: string; error: string };
 
@@ -56,10 +57,80 @@ function classifyStartupError(error: unknown): StartupDiagnostic {
 }
 
 /**
+ * Health endpoints must remain callable even when database configuration or
+ * application startup fails; otherwise the health route hides the real cause.
+ */
+function getRequestPath(req: Request): string {
+  const rawUrl = req.originalUrl || req.url || '/';
+  try {
+    return new URL(rawUrl, 'http://localhost').pathname.replace(/\\/+$/, '') || '/';
+  } catch {
+    return rawUrl.split('?')[0].replace(/\\/+$/, '') || '/';
+  }
+}
+
+async function handleHealthRequest(pathname: string, res: Response): Promise<boolean> {
+  if (pathname === '/api/health' || pathname === '/health') {
+    const dbInfo = getSanitizedDbInfo();
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({
+      status: dbInfo.isConfigured ? 'ok' : 'degraded',
+      serverless: true,
+      databaseConfigured: dbInfo.isConfigured,
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  }
+
+  if (
+    pathname === '/api/health/db' ||
+    pathname === '/health/db' ||
+    pathname === '/api/db-status' ||
+    pathname === '/db-status'
+  ) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!pool) {
+      res.status(503).json({
+        status: 'unhealthy',
+        code: 'DATABASE_URL_MISSING_OR_INVALID',
+        error: 'DATABASE_URL is missing or invalid in this Vercel deployment.',
+        databaseConfigured: false
+      });
+      return true;
+    }
+
+    try {
+      const result = await pool.query('SELECT NOW() AS db_time');
+      res.status(200).json({
+        status: 'connected',
+        dbTime: result.rows[0].db_time,
+        databaseConfigured: true
+      });
+    } catch (error: unknown) {
+      console.error('[EOM] Database health check failed:', error instanceof Error ? error.message : error);
+      res.status(503).json({
+        status: 'unhealthy',
+        code: 'DATABASE_QUERY_FAILED',
+        error: 'The database URI is configured, but the API could not query Supabase. Check Vercel Runtime Logs.'
+      });
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Single Vercel serverless entry for all /api/* requests.
  * Keep all database access on the server; never expose DATABASE_URL in VITE_*.
  */
 export default async function handler(req: Request, res: Response): Promise<void> {
+  const pathname = getRequestPath(req);
+
+  // These diagnostics intentionally run before getEomApp(), which requires a
+  // database and authentication configuration during production startup.
+  if (await handleHealthRequest(pathname, res)) return;
+
   try {
     const app = await getEomApp();
     app(req, res);
