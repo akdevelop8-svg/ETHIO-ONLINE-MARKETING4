@@ -14,13 +14,13 @@ import {
   User, 
   Order, 
   Transaction 
-} from '../../types';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { authService } from '../auth/authService';
-import { orderService } from '../orders/orderService';
-import { transactionService } from '../transactions/transactionService';
-import { disputeRepository, DisputeRepository } from '../persistence';
+} from '../../types/index.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { authService } from '../auth/authService.js';
+import { orderService } from '../orders/orderService.js';
+import { transactionService } from '../transactions/transactionService.js';
+import { disputeRepository, DisputeRepository } from '../persistence/index.js';
 
 const STORAGE_DISPUTES_KEY = 'eom_disputes_v2';
 
