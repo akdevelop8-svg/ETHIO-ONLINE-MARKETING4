@@ -63,9 +63,9 @@ function classifyStartupError(error: unknown): StartupDiagnostic {
 function getRequestPath(req: Request): string {
   const rawUrl = req.originalUrl || req.url || '/';
   try {
-    return new URL(rawUrl, 'http://localhost').pathname.replace(/\\/+$/, '') || '/';
+    return new URL(rawUrl, 'http://localhost').pathname.replace(/\/+$/, '') || '/';
   } catch {
-    return rawUrl.split('?')[0].replace(/\\/+$/, '') || '/';
+    return rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
   }
 }
 
