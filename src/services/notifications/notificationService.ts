@@ -5,9 +5,9 @@
  * designed for integration with @Ethio_Online_Marketing_Bot and real-time operational alerts.
  */
 
-import { AppNotification, NotificationEventType, User } from '../../types';
-import { OFFICIAL_BOT_USERNAME } from '../../constants';
-import { notificationRepository, NotificationRepository } from '../persistence';
+import { AppNotification, NotificationEventType, User } from '../../types/index.js';
+import { OFFICIAL_BOT_USERNAME } from '../../constants/index.js';
+import { notificationRepository, NotificationRepository } from '../persistence/index.js';
 
 const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
