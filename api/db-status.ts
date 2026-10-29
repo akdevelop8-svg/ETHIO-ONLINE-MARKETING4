@@ -13,7 +13,7 @@ export default async function handler(_req: Request, res: Response): Promise<voi
       status: 'unhealthy',
       code: 'DATABASE_URL_MISSING_OR_INVALID',
       databaseConfigured: false,
-      error: 'DATABASE_URL is missing or invalid in this Vercel deployment.'
+      error: 'The service is temporarily unavailable. Please try again.'
     });
     return;
   }
