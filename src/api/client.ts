@@ -1,13 +1,7 @@
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | boolean | undefined> }).env;
-const configuredApiBase = typeof viteEnv?.VITE_API_BASE_URL === 'string'
-  ? viteEnv.VITE_API_BASE_URL.trim().replace(/\/+$/, '')
-  : '';
-
-// VITE_API_BASE_URL is only needed when the API is hosted on a different origin.
-// The Vercel deployment serves the frontend and API on the same origin, so leave it unset.
-const apiRoot = configuredApiBase
-  ? `${configuredApiBase.replace(/\/api$/i, '')}/api`
-  : '/api';
+// ETHIO ONLINE MARKET is deployed as a same-origin Vercel frontend + serverless API.
+// Always use the relative API path so stale VITE_API_BASE_URL settings cannot send
+// sign-in, sign-up, or AI requests to an old / unavailable backend host.
+const apiRoot = '/api';
 
 export const buildApiUrl = (endpoint: string): string => {
   const withoutApiPrefix = endpoint.replace(/^\/?api(?=\/|$)/i, '');
@@ -59,7 +53,7 @@ export const apiClient = {
           : '';
 
       const message = backendMessage || (res.status === 404
-        ? 'API route not found (404). If your frontend and backend use different hosts, set VITE_API_BASE_URL to the backend origin and redeploy the frontend.'
+        ? 'API endpoint not found on this Vercel deployment. Confirm the latest API function has been deployed from the correct repository.'
         : `API Error: ${res.status} ${res.statusText}`);
 
       throw new Error(message);
