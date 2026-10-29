@@ -3,9 +3,9 @@
  * Phase 6: Post-Purchase Rating & Feedback
  */
 
-import { OrderReview, Order, User } from '../../types';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
+import { OrderReview, Order, User } from '../../types/index.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
 
 const STORAGE_REVIEWS_KEY = 'eom_reviews_vault_v1';
 
