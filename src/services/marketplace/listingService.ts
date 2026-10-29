@@ -13,12 +13,12 @@ import {
   ModerationHistoryEntry, 
   MarketplaceFilters, 
   User 
-} from '../../types';
-import { SAMPLE_INITIAL_LISTINGS } from '../../constants';
-import { authService } from '../auth/authService';
-import { auditService } from '../audit/auditService';
-import { notificationService } from '../notifications/notificationService';
-import { listingRepository, ListingRepository } from '../persistence';
+} from '../../types/index.js';
+import { SAMPLE_INITIAL_LISTINGS } from '../../constants/index.js';
+import { authService } from '../auth/authService.js';
+import { auditService } from '../audit/auditService.js';
+import { notificationService } from '../notifications/notificationService.js';
+import { listingRepository, ListingRepository } from '../persistence/index.js';
 
 const STORAGE_LISTINGS_KEY = 'eom_listings_vault_v2';
 
