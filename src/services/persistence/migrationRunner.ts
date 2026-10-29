@@ -6,8 +6,8 @@
  * Safely migrates unversioned legacy localStorage payloads to versioned schema structures.
  */
 
-import { IPersistenceAdapter } from './persistenceAdapter';
-import { Transaction, Order } from '../../types';
+import { IPersistenceAdapter } from './persistenceAdapter.js';
+import { Transaction, Order } from '../../types/index.js';
 
 export interface MigrationResult {
   collection: string;
