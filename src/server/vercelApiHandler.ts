@@ -11,42 +11,42 @@ function classifyStartupError(error: unknown): StartupDiagnostic {
   if (/database_url is missing or invalid|database_url is required|database_url not set/.test(normalized)) {
     return {
       code: 'DATABASE_URL_MISSING_OR_INVALID',
-      error: 'DATABASE_URL is missing or invalid. Add the real Supabase PostgreSQL connection URI to Vercel Environment Variables.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   if (/jwt_secret is required/.test(normalized)) {
     return {
       code: 'JWT_SECRET_MISSING',
-      error: 'JWT_SECRET is missing. Add a strong private JWT_SECRET in Vercel Environment Variables.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   if (/admin_password is required/.test(normalized)) {
     return {
       code: 'ADMIN_PASSWORD_MISSING',
-      error: 'ADMIN_PASSWORD is missing. Add a private ADMIN_PASSWORD in Vercel Environment Variables.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   if (/persistence lock pool could not be initialized|requestlockpool/.test(normalized)) {
     return {
       code: 'DATABASE_POOL_INITIALIZATION_FAILED',
-      error: 'The Supabase database pool could not be initialized. Check DATABASE_URL and its Transaction Pooler host/port.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   if (/sql schema file is missing/.test(normalized)) {
     return {
       code: 'DATABASE_SCHEMA_FILE_MISSING',
-      error: 'The database schema file was not included in the Vercel deployment package. Redeploy the latest GitHub commit.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   if (/schema setup failed|password authentication failed|enotfound|econnrefused|etimedout|connection terminated|no pg_hba|database .* does not exist|permission denied|syntax error|too many connections|server closed the connection/.test(normalized)) {
     return {
       code: 'SUPABASE_CONNECTION_OR_SCHEMA_FAILED',
-      error: 'The API could not connect to Supabase or apply the database schema. Verify the connection URI, database password, Transaction Pooler port, SSL settings, and Supabase project status.'
+      error: 'Something went wrong. Please try again.'
     };
   }
   return {
     code: 'API_INITIALIZATION_FAILED',
-    error: 'The API failed to start. Open Vercel Runtime Logs and inspect the [EOM] Vercel API initialization failed entry.'
+    error: 'Something went wrong. Please try again.'
   };
 }
 
@@ -121,7 +121,7 @@ export async function handleVercelApiRequest(
         status: 'unhealthy',
         code: 'DATABASE_URL_MISSING_OR_INVALID',
         databaseConfigured: false,
-        error: 'DATABASE_URL is missing or invalid in this Vercel deployment.'
+        error: 'Something went wrong. Please try again.'
       });
       return;
     }
@@ -139,7 +139,7 @@ export async function handleVercelApiRequest(
         status: 'unhealthy',
         code: 'DATABASE_QUERY_FAILED',
         databaseConfigured: true,
-        error: 'The database URI is configured, but the API could not query Supabase. Check Vercel Runtime Logs.'
+        error: 'Something went wrong. Please try again.'
       });
     }
     return;
