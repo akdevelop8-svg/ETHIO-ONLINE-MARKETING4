@@ -52,9 +52,14 @@ export const apiClient = {
           ? data.message
           : '';
 
-      const message = backendMessage || (res.status === 404
-        ? 'API endpoint not found on this Vercel deployment. Confirm the latest API function has been deployed from the correct repository.'
-        : `API Error: ${res.status} ${res.statusText}`);
+      // Never expose deployment providers, filesystem paths, SQL details, or
+      // server initialization diagnostics in customer-facing messages.
+      const containsInternalDetails = /vercel|supabase|database_url|api endpoint|api initialization|failed to start|cannot find module|\\/var\\/task|runtime logs|environment variables|sql schema|internal server/i.test(backendMessage);
+      const message = res.status >= 500 || containsInternalDetails
+        ? 'Something went wrong. Please try again.'
+        : backendMessage || (res.status === 404
+          ? 'This service is currently unavailable. Please try again.'
+          : 'Something went wrong. Please try again.');
 
       throw new Error(message);
     }
