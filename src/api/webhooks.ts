@@ -22,10 +22,11 @@ webhooksRouter.post('/payment/:provider', async (req: Request, res: Response) =>
       res.status(400).json(result);
     }
   } catch (err: any) {
+    console.error('[EOM] Payment webhook processing failed:', err?.message || err);
     res.status(500).json({
       success: false,
       processed: false,
-      error: err.message || 'Webhook processing failed'
+      error: 'Unable to process this request. Please try again.'
     });
   }
 });
