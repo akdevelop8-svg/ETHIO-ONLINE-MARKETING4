@@ -3,11 +3,11 @@
  * Phase 2 - 8: Platform Operations & Executive Dashboard
  */
 
-import { AdminDashboardMetrics, User } from '../../types';
-import { authService } from '../auth/authService';
-import { listingService } from '../marketplace/listingService';
-import { orderService } from '../orders/orderService';
-import { transactionService } from '../transactions/transactionService';
+import { AdminDashboardMetrics, User } from '../../types/index.js';
+import { authService } from '../auth/authService.js';
+import { listingService } from '../marketplace/listingService.js';
+import { orderService } from '../orders/orderService.js';
+import { transactionService } from '../transactions/transactionService.js';
 
 class AdminService {
   /**
