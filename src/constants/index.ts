@@ -2,7 +2,7 @@
  * EOM Constants & Configuration Data
  */
 
-import { Listing, ListingCategory, PlatformType, LanguageOption, PaymentMethodType } from '../types';
+import { Listing, ListingCategory, PlatformType, LanguageOption, PaymentMethodType } from '../types/index.js';
 
 export const APP_NAME = "ኢትዮ Online Market";
 export const APP_SHORT_NAME = "ኢትዮ";
